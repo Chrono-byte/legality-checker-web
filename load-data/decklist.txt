@@ -20,15 +20,17 @@
 8 Forest
 1 Frontier Bivouac
 1 Growth Spiral
-7 Island
+1 Heroic Intervention
+8 Island
 1 Jadzi, Oracle of Arcavios
 1 Ketria Triome
-1 Lightning Greaves
 1 Llanowar Elves
-7 Mountain
+9 Mountain
+1 Negate
 1 Opt
 1 Quandrix Apprentice
 1 Ral, Crackling Wit
+1 Reality Shift
 1 Rejuvenating Springs
 1 Reliquary Tower
 1 Rockfall Vale
@@ -36,7 +38,6 @@
 1 Rootbound Crag
 1 Search for Azcanta
 25 Slime Against Humanity
-1 Sol Ring
 1 Spire Garden
 1 Steam Vents
 1 Stomping Ground
@@ -51,4 +52,4 @@
 1 Valley Floodcaller
 1 Wizard Class
 
-1 Storm, Force of Nature
+1 Loot, the Key to Everything

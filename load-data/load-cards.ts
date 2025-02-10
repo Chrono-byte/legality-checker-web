@@ -1,4 +1,7 @@
-import type { IScryfallCard } from "npm:scryfall-types";
+import type {
+  IScryfallCard,
+  IScryfallColor as _IScryfallColor,
+} from "npm:scryfall-types";
 
 // load our banned list and allowed lists
 const bannedList = await Deno.readTextFile(
@@ -26,20 +29,19 @@ export default class CardManager {
     this.bannedList = bannedListArray;
     this.allowedList = allowedListArray;
 
-    // startup routine
-    let cycle = 0;
-    const maxCycles = 1;
+    this.init().then(() => {
+      console.log("Card manager initialized");
+    });
+  }
 
-    // try to load cards from disk 3 times
-    while (cycle < maxCycles) {
+  async init() {
+    // try to load cards from disk for n times where n is the number of attempts we allow
+    for (let i = 0; i < 1; i++) {
       try {
         this.loadCards();
-        break;
       } catch (error) {
-        console.error("Error loading cards:", error);
-        console.log("Downloading cards...");
-        this.downloadCards();
-        cycle++;
+        console.error("Error loading cards from disk:", error);
+        await this.downloadCards();
       }
     }
   }
@@ -48,7 +50,7 @@ export default class CardManager {
     // check if cards.json exists
     Deno.statSync(
       "/home/chrono/Documents/Dev/pdh-web/load-data/cards.json",
-    ); // throws error if file does not exist
+    );
 
     // read cards.json
     this.cards = JSON.parse(
@@ -61,19 +63,10 @@ export default class CardManager {
     const pdhCards = this.cards.filter((
       card: IScryfallCard,
     ) => {
-      // if (card.card_faces) {
-      //   console.log(card);
-      //   process.exit(1);
-      // }
-
-      // check if card is in the pdh whitelist
-      if (allowedListArray.includes(card.name)) {
-        // log that we have encountered a card in the allowed list
-        return true;
-      }
       // check if card is legal in pioneer and is a paper card
       if (
-        card.legalities.pioneer === "legal" && card.games.includes("paper")
+        (card.legalities.pioneer === "legal" && card.games.includes("paper")) ||
+        (allowedListArray.includes(card.name) && card.games.includes("paper"))
       ) {
         return true;
       }
@@ -109,8 +102,6 @@ export default class CardManager {
       const bulkDataUrl = data.download_uri;
 
       console.log("Fetching bulk card data from:", bulkDataUrl);
-
-      console.log("Fetching bulk card data...");
 
       // fetch bulk card data
       const bulkDataResponse = await fetch(bulkDataUrl);
@@ -195,9 +186,8 @@ export default class CardManager {
     if (!commanderLegal) {
       illegalcards.push(commander.name);
     } else {
-      for (let i = 0; i < commander.quantity; i++) {
-        legalcards.push(commanderLegal);
-      }
+      // add commander to deck
+      legalcards.push(commanderLegal);
     }
 
     // check if cards are legal
@@ -210,29 +200,37 @@ export default class CardManager {
       const isDFC = this.cards.find((c) => {
         if (c.card_faces) {
           // if one of the card faces contains the card name, return true
-          return c.card_faces.find((cf) => cf.name.includes(cardName));
+          if (c.card_faces.find((cf) => (cf.name === cardName))) {
+            return true;
+          }
         }
 
         return null;
       });
 
       if (isDFC) {
+        // check the color identity of both faces
         legalcards.push(isDFC);
         return;
       }
 
       // is the card legal
-      const legal = this.cards.find((c) => c.name === cardName);
+      const cardFound = this.cards.find((c) => c.name === cardName);
 
-      if (!legal) {
+      if (!cardFound) {
         illegalcards.push(cardName);
       } else {
         for (let i = 0; i < quantity; i++) {
-          legalcards.push(legal);
+          legalcards.push(cardFound);
         }
       }
     });
 
     return [legalcards, illegalcards];
+  }
+
+  fetchCard(cardName: string): IScryfallCard | null {
+    const card = this.cards.find((c) => c.name === cardName);
+    return card || null;
   }
 }
