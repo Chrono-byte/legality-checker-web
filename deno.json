@@ -22,7 +22,6 @@
   ],
   "imports": {
     "$fresh/": "https://deno.land/x/fresh@1.7.3/",
-    "mtgsdk": "npm:mtgsdk@^1.0.1",
     "preact": "https://esm.sh/preact@10.22.0",
     "preact/": "https://esm.sh/preact@10.22.0/",
     "@preact/signals": "https://esm.sh/*@preact/signals@1.2.2",
@@ -36,5 +35,13 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "nodeModulesDir": "auto"
+  "nodeModulesDir": "auto",
+  "deploy": {
+    "project": "3087519a-366e-47a7-8118-873a7788ca01",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "main.ts"
+  }
 }

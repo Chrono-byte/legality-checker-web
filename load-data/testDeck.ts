@@ -3,7 +3,7 @@ import CardManager from "./load-cards.ts";
 
 // create enum containing our deckbuilding restrictions
 enum DeckbuildingRestrictions {
-  DeckSize = 50,
+  DeckSize = 100,
 }
 
 // read decklist.txt

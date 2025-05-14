@@ -5,10 +5,13 @@ import type {
 
 // load our banned list and allowed lists
 const bannedList = await Deno.readTextFile(
-  "/home/chrono/Documents/Dev/pdh-web/load-data/banned_list.csv",
+  new URL("./banned_list.csv", import.meta.url)
 );
 const allowedList = await Deno.readTextFile(
-  "/home/chrono/Documents/Dev/pdh-web/load-data/allowed_list.csv",
+  new URL("./allowed_list.csv", import.meta.url)
+);
+const singletonExceptions = await Deno.readTextFile(
+  new URL("./singleton_exceptions.csv", import.meta.url)
 );
 
 // parse the lists into arrays of card names, we must also parse each line as a string as they are wrapped in quotes
@@ -19,15 +22,20 @@ const bannedListArray = bannedList.split("\n").map((line) =>
 const allowedListArray = allowedList.split("\n").map((line) =>
   line.replace(/"/g, "")
 );
+const singletonExceptionsArray = singletonExceptions.split("\n").map((line) =>
+  line.replace(/"/g, "").trim()
+).filter(Boolean); // Filter out any empty lines
 
 export default class CardManager {
   cards: IScryfallCard[];
   bannedList: string[];
   allowedList: string[];
+  singletonExceptions: string[];
   constructor() {
     this.cards = [];
     this.bannedList = bannedListArray;
     this.allowedList = allowedListArray;
+    this.singletonExceptions = singletonExceptionsArray;
 
     this.init().then(() => {
       console.log("Card manager initialized");
@@ -49,13 +57,13 @@ export default class CardManager {
   loadCards() {
     // check if cards.json exists
     Deno.statSync(
-      "/home/chrono/Documents/Dev/pdh-web/load-data/cards.json",
+      new URL("./cards.json", import.meta.url),
     );
 
     // read cards.json
     this.cards = JSON.parse(
       Deno.readTextFileSync(
-        "/home/chrono/Documents/Dev/pdh-web/load-data/cards.json",
+        new URL("./cards.json", import.meta.url),
       ),
     ) as IScryfallCard[];
 
@@ -114,14 +122,14 @@ export default class CardManager {
 
       // write to disk
       await Deno.writeTextFile(
-        "/home/chrono/Documents/Dev/pdh-web/load-data/cards.json",
+        new URL("./cards.json", import.meta.url),
         JSON.stringify(bulkData, null, 2),
       );
 
       // check read
       const cards = JSON.parse(
         await Deno.readTextFile(
-          "/home/chrono/Documents/Dev/pdh-web/load-data/cards.json",
+          new URL("./cards.json", import.meta.url),
         ),
       ) as IScryfallCard[];
 
@@ -232,5 +240,10 @@ export default class CardManager {
   fetchCard(cardName: string): IScryfallCard | null {
     const card = this.cards.find((c) => c.name === cardName);
     return card || null;
+  }
+
+  // Check if a card is allowed to break the singleton rule
+  isAllowedToBreakSingletonRule(cardName: string): boolean {
+    return this.singletonExceptions.includes(cardName);
   }
 }
