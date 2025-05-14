@@ -19,12 +19,8 @@ export default function Home() {
 
         <footer class="mt-12 text-center text-sm text-gray-500">
           <p>
-            PHL is a format where your commander must be legal in Pioneer, and
-            all other cards in your deck must be within your commander's color
-            identity and legal in Pioneer.
-          </p>
-          <p class="mt-2">
-            &copy; {new Date().getFullYear()} PHL Legality Checker
+            PHL is a format based on Commander, with the added restriction of all cards
+            being legal in Pioneer.
           </p>
         </footer>
       </div>
