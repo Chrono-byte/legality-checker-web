@@ -6,6 +6,9 @@ import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
 import * as $api_check_legality from "./routes/api/check-legality.ts";
 import * as $api_fetch_deck from "./routes/api/fetch-deck.ts";
+import * as $banlist_analysis from "./routes/banlist-analysis.tsx";
+import * as $banlist from "./routes/banlist.tsx";
+import * as $deck_checker from "./routes/deck-checker.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $DeckLegalityChecker from "./islands/DeckLegalityChecker.tsx";
 import type { Manifest } from "$fresh/server.ts";
@@ -16,6 +19,9 @@ const manifest = {
     "./routes/_app.tsx": $_app,
     "./routes/api/check-legality.ts": $api_check_legality,
     "./routes/api/fetch-deck.ts": $api_fetch_deck,
+    "./routes/banlist-analysis.tsx": $banlist_analysis,
+    "./routes/banlist.tsx": $banlist,
+    "./routes/deck-checker.tsx": $deck_checker,
     "./routes/index.tsx": $index,
   },
   islands: {

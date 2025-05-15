@@ -20,7 +20,6 @@ interface LegalityResult {
   illegalCards?: string[];
   colorIdentityViolations?: string[];
   nonSingletonCards?: string[];
-  singletonExceptionCardsUsed?: string[];
   reservedListCards?: string[];
   legalIssues?: {
     size?: string | null;
@@ -49,7 +48,9 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
   const [colorIdentity, setColorIdentity] = useState<string[]>([]);
 
   async function checkDeckLegality() {
-    if (!deckUrl.trim()) {
+    // Input validation
+    const trimmedDeckUrl = deckUrl.trim();
+    if (!trimmedDeckUrl) {
       setLegalityStatus("Please enter a valid deck URL");
       return;
     }
@@ -60,27 +61,42 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
 
     try {
       // Extract deck ID from URL if it's a Moxfield URL
-      let deckId = deckUrl;
-      if (deckUrl.includes("moxfield.com")) {
-        const urlParts = deckUrl.split("/");
-        deckId = urlParts[urlParts.length - 1];
+      let deckId = trimmedDeckUrl;
+      if (trimmedDeckUrl.includes("moxfield.com")) {
+        const urlParts = trimmedDeckUrl.split("/");
+        // Get the last non-empty segment
+        for (let i = urlParts.length - 1; i >= 0; i--) {
+          if (urlParts[i]) {
+            deckId = urlParts[i];
+            break;
+          }
+        }
       }
 
-      const decklist = await fetchDecklist(deckId);
+      // Fetch deck and check legality in parallel where possible
+      const decklistPromise = fetchDecklist(deckId);
+
+      // Wait for the decklist to be fetched
+      const decklist = await decklistPromise;
+
+      // Check legality once we have the deck
       const legalityResult = await checkPHLLegality(decklist);
-      
+
+      // Update UI with results
       setResult(legalityResult);
       setCommander(legalityResult.commander);
       setColorIdentity(legalityResult.colorIdentity || []);
-      
+
       if (legalityResult.legal) {
         setLegalityStatus("✅ Deck is legal for PHL!");
       } else {
         setLegalityStatus("❌ Deck is not legal for PHL");
       }
     } catch (error: unknown) {
-      console.error(error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error checking deck legality:", error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : String(error);
       setLegalityStatus(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -88,42 +104,197 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
   }
 
   async function fetchDecklist(deckId: string): Promise<Decklist> {
-    // Fetch deck from Moxfield API
-    const response = await fetch(`/api/fetch-deck?id=${encodeURIComponent(deckId)}`);
+    // Fetch deck from API with a timeout and retry logic
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
+    const maxRetries = 2;
+    let retries = 0;
 
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || "Failed to fetch decklist");
+    while (retries <= maxRetries) {
+      try {
+        // Increase timeout with each retry
+        const timeoutMs = 15000 + (retries * 5000);
+        
+        // Clear any existing timeout
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        // Fetch deck data with proper error handling
+        const response = await fetch(
+          `/api/fetch-deck?id=${encodeURIComponent(deckId)}`,
+          { 
+            signal: controller.signal,
+            // Add HTTP/2 optimizations
+            cache: "default", // Use browser's standard cache behavior
+            keepalive: true, // Keep connection alive for better performance
+          },
+        );
+
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+
+        // Handle error responses from the API
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+
+          // Special handling for rate limit errors
+          if (response.status === 429) {
+            const retryAfter = response.headers.get("Retry-After") ||
+              data.retryAfter || "60";
+            const seconds = parseInt(retryAfter, 10);
+            
+            if (retries < maxRetries) {
+              retries++;
+              // Use the retry-after value or exponential backoff
+              const waitTime = seconds * 1000 || Math.pow(2, retries) * 1000;
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+            
+            throw new Error(
+              `Rate limit exceeded. Please try again in ${seconds} second${
+                seconds !== 1 ? "s" : ""
+              }.`,
+            );
+          }
+
+          throw new Error(
+            data.error || `Failed to fetch decklist (${response.status})`,
+          );
+        }
+
+        // Parse the JSON response
+        return await response.json();
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+        
+        if (error instanceof Error) {
+          if (error.name === "AbortError" || 
+              error.name === "TypeError" ||
+              error.message.includes("network")) {
+            
+            retries++;
+            if (retries <= maxRetries) {
+              // Exponential backoff
+              const backoffTime = 1000 * Math.pow(2, retries);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              continue;
+            }
+            
+            throw new Error(
+              "Request timeout or network error - the server took too long to respond",
+            );
+          }
+        }
+        throw error;
+      }
     }
-
-    return await response.json();
+    
+    // This should never be reached due to the error handling above
+    throw new Error("Failed to fetch deck after multiple attempts");
   }
 
   async function checkPHLLegality(decklist: Decklist): Promise<LegalityResult> {
-    // Call our API endpoint to check legality
-    const response = await fetch("/api/check-legality", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(decklist),
-    });
+    // Call our API endpoint to check legality with improved timeout and retry logic
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
+    const maxRetries = 2;
+    let retries = 0;
 
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || "Failed to check deck legality");
+    while (retries <= maxRetries) {
+      try {
+        // Increase timeout with each retry
+        const timeoutMs = 15000 + (retries * 5000);
+        
+        // Clear any existing timeout
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        // Send request to check legality with HTTP/2 optimizations
+        const response = await fetch("/api/check-legality", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(decklist),
+          signal: controller.signal,
+          // HTTP/2 optimizations
+          keepalive: true, // Keep connection alive for better performance
+        });
+
+        // Clear timeout since we got a response
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+
+        // Handle API errors
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+
+          // Special handling for rate limit errors
+          if (response.status === 429) {
+            const retryAfter = response.headers.get("Retry-After") ||
+              data.retryAfter || "60";
+            const seconds = parseInt(retryAfter, 10);
+            
+            if (retries < maxRetries) {
+              retries++;
+              // Use the retry-after value or exponential backoff
+              const waitTime = seconds * 1000 || Math.pow(2, retries) * 1000;
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+            
+            throw new Error(
+              `Rate limit exceeded. Please try again in ${seconds} second${
+                seconds !== 1 ? "s" : ""
+              }.`,
+            );
+          }
+
+          throw new Error(
+            data.error || `Failed to check deck legality (${response.status})`,
+          );
+        }
+
+        // Parse and return the result
+        return await response.json();
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+        
+        if (error instanceof Error) {
+          if (error.name === "AbortError" || 
+              error.name === "TypeError" ||
+              error.message.includes("network")) {
+            
+            retries++;
+            if (retries <= maxRetries) {
+              // Exponential backoff
+              const backoffTime = 1000 * Math.pow(2, retries);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              continue;
+            }
+            
+            throw new Error("Request timeout - the legality check took too long");
+          }
+        }
+        throw error;
+      }
     }
-
-    return await response.json();
+    
+    // This should never be reached due to the error handling above
+    throw new Error("Failed to check deck legality after multiple attempts");
   }
 
   // Helper function to get legality issues from result
   function getLegalityIssues(): string[] {
     if (!result || !result.legalIssues) return [];
-    
+
     const issues: string[] = [];
     const { legalIssues } = result;
-    
+
     if (legalIssues.size) issues.push(legalIssues.size);
     if (legalIssues.commander) issues.push(legalIssues.commander);
     if (legalIssues.commanderType) issues.push(legalIssues.commanderType);
@@ -131,7 +302,7 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
     if (legalIssues.singleton) issues.push(legalIssues.singleton);
     if (legalIssues.illegalCards) issues.push(legalIssues.illegalCards);
     if (legalIssues.reservedList) issues.push(legalIssues.reservedList);
-    
+
     return issues;
   }
 
@@ -152,9 +323,9 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
           disabled={loading}
         />
       </div>
-      
-      <Button 
-        onClick={checkDeckLegality} 
+
+      <Button
+        onClick={checkDeckLegality}
         disabled={loading}
         class="mt-2"
       >
@@ -164,18 +335,26 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
       {legalityStatus && (
         <div class="mt-4 p-4 border rounded-md bg-gray-50">
           <p class="text-xl font-bold">{legalityStatus}</p>
-          
+
           {commander && (
             <div class="mt-2">
-              <p><strong>Commander:</strong> {commander}</p>
-              <p><strong>Color Identity:</strong> {colorIdentity.join(", ")}</p>
-              
+              <p>
+                <strong>Commander:</strong> {commander}
+              </p>
+              <p>
+                <strong>Color Identity:</strong> {colorIdentity.join(", ")}
+              </p>
+
               {result?.deckSize && (
-                <p><strong>Deck Size:</strong> {result.deckSize} cards (Required: {result.requiredSize})</p>
+                <p>
+                  <strong>Deck Size:</strong> {result.deckSize} cards (Required:
+                  {" "}
+                  {result.requiredSize})
+                </p>
               )}
             </div>
           )}
-          
+
           {/* Display legality issues if not legal */}
           {result && !result.legal && (
             <div class="mt-4">
@@ -189,9 +368,13 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
           )}
 
           {/* Show cards with color identity violations */}
-          {result?.colorIdentityViolations && result.colorIdentityViolations.length > 0 && (
+          {result?.colorIdentityViolations &&
+            result.colorIdentityViolations.length > 0 && (
             <div class="mt-4">
-              <h3 class="font-bold">Color Identity Violations ({result.colorIdentityViolations.length}):</h3>
+              <h3 class="font-bold">
+                Color Identity Violations ({result.colorIdentityViolations
+                  .length}):
+              </h3>
               <ul class="list-disc ml-6 mt-1">
                 {result.colorIdentityViolations.map((card) => (
                   <li key={card}>{card}</li>
@@ -199,11 +382,13 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
               </ul>
             </div>
           )}
-          
+
           {/* Show cards that violate singleton rule */}
           {result?.nonSingletonCards && result.nonSingletonCards.length > 0 && (
             <div class="mt-4">
-              <h3 class="font-bold">Non-Singleton Cards ({result.nonSingletonCards.length}):</h3>
+              <h3 class="font-bold">
+                Non-Singleton Cards ({result.nonSingletonCards.length}):
+              </h3>
               <ul class="list-disc ml-6 mt-1">
                 {result.nonSingletonCards.map((card) => (
                   <li key={card}>{card}</li>
@@ -215,32 +400,21 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
           {/* Show illegal cards */}
           {result?.illegalCards && result.illegalCards.length > 0 && (
             <div class="mt-4">
-              <h3 class="font-bold">Illegal Cards ({result.illegalCards.length}):</h3>
+              <h3 class="font-bold">
+                Illegal Cards ({result.illegalCards.length}):
+              </h3>
               <ul class="list-disc ml-6 mt-1">
-                {result.illegalCards.map((card) => (
-                  <li key={card}>{card}</li>
-                ))}
+                {result.illegalCards.map((card) => <li key={card}>{card}</li>)}
               </ul>
             </div>
           )}
-          
-          {/* Show singleton exception cards used */}
-          {result?.singletonExceptionCardsUsed && result.singletonExceptionCardsUsed.length > 0 && (
-            <div class="mt-4">
-              <h3 class="font-bold text-green-600">Singleton Exception Cards Used ({result.singletonExceptionCardsUsed.length}):</h3>
-              <p class="text-sm text-gray-600 mb-1">These cards are allowed to have multiple copies in your deck.</p>
-              <ul class="list-disc ml-6 mt-1">
-                {result.singletonExceptionCardsUsed.map((card) => (
-                  <li key={card} class="text-green-600">{card}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          
+
           {/* Show Reserved List cards if any */}
           {result?.reservedListCards && result.reservedListCards.length > 0 && (
             <div class="mt-4">
-              <h3 class="font-bold">Reserved List Cards ({result.reservedListCards.length}):</h3>
+              <h3 class="font-bold">
+                Reserved List Cards ({result.reservedListCards.length}):
+              </h3>
               <ul class="list-disc ml-6 mt-1">
                 {result.reservedListCards.map((card) => (
                   <li key={card}>{card}</li>

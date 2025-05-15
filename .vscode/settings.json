@@ -16,8 +16,5 @@
   },
   "css.customData": [
     ".vscode/tailwind.json"
-  ],
-  "[cpp]": {
-    "editor.defaultFormatter": "ms-vscode.cpptools"
-  }
+  ]
 }

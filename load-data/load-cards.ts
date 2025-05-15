@@ -5,13 +5,13 @@ import type {
 
 // load our banned list and allowed lists
 const bannedList = await Deno.readTextFile(
-  new URL("./banned_list.csv", import.meta.url)
+  new URL("./banned_list.csv", import.meta.url),
 );
 const allowedList = await Deno.readTextFile(
-  new URL("./allowed_list.csv", import.meta.url)
+  new URL("./allowed_list.csv", import.meta.url),
 );
 const singletonExceptions = await Deno.readTextFile(
-  new URL("./singleton_exceptions.csv", import.meta.url)
+  new URL("./singleton_exceptions.csv", import.meta.url),
 );
 
 // parse the lists into arrays of card names, we must also parse each line as a string as they are wrapped in quotes
@@ -95,13 +95,34 @@ export default class CardManager {
 
   async downloadCards() {
     try {
-      // deno fetch bulk card data from scryfall api
+      // Use AbortController for timeout with proper error handling
+      const controller = new AbortController();
+      let timeoutId: number | undefined;
+      const timeoutMs = 30000; // Generous timeout for large data
+      
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      console.log("Fetching Scryfall bulk data information...");
+      
+      // deno fetch bulk card data from scryfall api with improved error handling
       const response = await fetch(
-        " https://api.scryfall.com/bulk-data/oracle-cards",
+        "https://api.scryfall.com/bulk-data/oracle-cards",
+        {
+          signal: controller.signal,
+          headers: {
+            "Accept": "application/json",
+            "User-Agent": "PHL-Legality-Checker",
+          },
+          // HTTP/2 optimizations
+          cache: "force-cache", // Use cache when possible
+          keepalive: true, // Keep connection alive for better performance
+        }
       );
 
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
-        throw new Error("Failed to fetch bulk card data");
+        throw new Error(`Failed to fetch bulk card data: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -111,15 +132,30 @@ export default class CardManager {
 
       console.log("Fetching bulk card data from:", bulkDataUrl);
 
-      // fetch bulk card data
-      const bulkDataResponse = await fetch(bulkDataUrl);
+      // Set a new timeout for the actual bulk data download
+      const bulkController = new AbortController(); 
+      timeoutId = setTimeout(() => bulkController.abort(), 120000); // 2 minute timeout for bulk download
+      
+      // fetch bulk card data with improved error handling
+      const bulkDataResponse = await fetch(bulkDataUrl, {
+        signal: bulkController.signal,
+        headers: {
+          "Accept": "application/json", 
+          "User-Agent": "PHL-Legality-Checker",
+        },
+        cache: "force-cache",
+      });
 
+      clearTimeout(timeoutId);
+      
       if (!bulkDataResponse.ok) {
-        throw new Error("Failed to fetch bulk card data");
+        throw new Error(`Failed to fetch bulk card data: ${bulkDataResponse.statusText}`);
       }
 
       const bulkData = await bulkDataResponse.json();
 
+      console.log(`Successfully downloaded ${bulkData.length} cards from Scryfall`);
+      
       // write to disk
       await Deno.writeTextFile(
         new URL("./cards.json", import.meta.url),

@@ -1,4 +1,6 @@
 import { type PageProps } from "$fresh/server.ts";
+import NavBar from "../components/NavBar.tsx";
+
 export default function App({ Component }: PageProps) {
   return (
     <html>
@@ -9,7 +11,10 @@ export default function App({ Component }: PageProps) {
         <link rel="stylesheet" href="/styles.css" />
       </head>
       <body>
-        <Component />
+        <NavBar />
+        <main class="min-h-screen bg-white">
+          <Component />
+        </main>
       </body>
     </html>
   );
