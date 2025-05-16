@@ -2,7 +2,7 @@ import type { IScryfallCard } from "npm:scryfall-types";
 import { isBuildMode } from "../utils/is-build.ts";
 
 /** Directory path for static data files */
-const _DATA_DIR = "./data";
+const DATA_DIR = "./data";
 /** Directory path for cached data */
 const CACHE_DIR = "./cache";
 
@@ -46,7 +46,7 @@ interface CardValidationResult {
  */
 async function loadCardList(filename: string): Promise<string[]> {
   const text = await Deno.readTextFile(
-    new URL(`${_DATA_DIR}/${filename}`, import.meta.url),
+    new URL(`${DATA_DIR}/${filename}`, import.meta.url),
   );
   return text
     .split("\n")
@@ -99,6 +99,8 @@ export default class CardManager {
     this.singletonExceptions = singletonExceptionsArray;
     this.cardLegality = new Map();
 
+    // If running in a non-build mode, load cards from cache or download them
+    // This is to avoid loading cards during static generation
     if (!isBuildMode()) {
       void this.loadCards();
     }
@@ -133,7 +135,7 @@ export default class CardManager {
    * @param retryCount Number of retries for failed requests
    * @throws Error if card data cannot be downloaded after all retries
    */
-  private async downloadCards(retryCount = 3): Promise<void> {
+  private async downloadCards(retryCount = 1): Promise<void> {
     try {
       const controller = new AbortController();
       const timeoutMs = 30000;
@@ -148,7 +150,34 @@ export default class CardManager {
       );
 
       // Filter cards to include only physical cards
-      const pdhCards = bulkData.filter((card) => card.games.includes("paper"));
+      // Only include cards that are possible to include during deck construction
+      const pdhCards = bulkData.filter((card) => {
+        // Exclude non-paper, tokens, memorabilia, emblems, and special types
+        if (!card.games.includes("paper")) return false;
+        const layout = card.layout?.toLowerCase() ?? "";
+        const typeLine = card.type_line?.toLowerCase() ?? "";
+        const setType = card.set_type?.toLowerCase() ?? "";
+        const name = card.name.toLowerCase();
+
+        if (layout.includes("token")) return false;
+        if (typeLine.includes("token")) return false;
+        if (setType.includes("memorabilia") || setType.includes("token")) {
+          return false;
+        }
+        if (name.includes("emblem")) return false;
+
+        // Exclude special card types
+        const excludedTypes = [
+          "vanguard",
+          "plane",
+          "scheme",
+          "conspiracy",
+          "phenomenon",
+        ];
+        if (excludedTypes.some((type) => typeLine.includes(type))) return false;
+
+        return true;
+      });
 
       // Calculate statistics
       const stats = this.calculateCardStats(pdhCards);
