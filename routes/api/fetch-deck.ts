@@ -8,237 +8,240 @@ import type {
   ErrorResponse,
 } from "../../types/moxfield.ts";
 
-// Common response headers
+// Constants
 const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
 
-// Initialize utilities
-const _deckCache = new DeckCache();
-export const rateLimiter = new RateLimiter();
+const REQUEST_CONFIG = {
+  maxRetries: 3,
+  maxTimeout: 20000, // 20 second maximum timeout
+  baseTimeout: 10000, // 10 second base timeout
+  backoffFactor: 1.5, // Exponential backoff multiplier
+};
 
-// Processes Moxfield data into our application format
-function processMoxfieldData(moxfieldData: MoxfieldResponse): ProcessedDeck {
-  const commander =
-    moxfieldData.commanders && Object.values(moxfieldData.commanders)[0]
-      ? {
-          quantity: 1,
-          name: Object.values(moxfieldData.commanders)[0].card.name,
-        }
-      : null;
+// Initialize utilities
+let deckCache: DeckCache | null = null;
+let rateLimiter: RateLimiter | null = null;
+
+// Helper functions
+const createError = (message: string, status = 400, rateLimit?: { headers: Record<string, string> }) => {
+  return new Response(
+    JSON.stringify({ error: message } as ErrorResponse),
+    {
+      status,
+      headers: { ...JSON_HEADERS, ...(rateLimit?.headers || {}) },
+    },
+  );
+};
+
+const calculateBackoff = (retries: number): number => {
+  return Math.min(
+    REQUEST_CONFIG.baseTimeout * Math.pow(REQUEST_CONFIG.backoffFactor, retries),
+    REQUEST_CONFIG.maxTimeout,
+  );
+};
+
+const processMoxfieldData = (moxfieldData: MoxfieldResponse): ProcessedDeck => {
+  const commander = moxfieldData.commanders && Object.values(moxfieldData.commanders)[0]
+    ? {
+      quantity: 1,
+      name: Object.values(moxfieldData.commanders)[0].card.name,
+    }
+    : null;
 
   const cards = moxfieldData.mainboard
     ? Object.values(moxfieldData.mainboard).map((card) => ({
-        quantity: card.quantity,
-        name: card.card.name,
-      }))
+      quantity: card.quantity,
+      name: card.card.name,
+    }))
     : [];
 
   return { cards, commander };
-}
+};
+
+const fetchDeckFromMoxfield = async (
+  deckId: string,
+  controller: AbortController,
+): Promise<Response> => {
+  const response = await fetch(
+    `https://api.moxfield.com/v2/decks/all/${deckId}`,
+    {
+      signal: controller.signal,
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "PHL-Legality-Checker",
+      },
+      cache: "force-cache",
+      keepalive: true,
+    },
+  );
+
+  if (!Deno.env.get("DENO_DEPLOYMENT_ID")) {
+    console.log(`Fetched deck: https://api.moxfield.com/v2/decks/all/${deckId}`);
+  }
+
+  return response;
+};
 
 export const handler = async (
   req: Request,
   _ctx: FreshContext,
 ): Promise<Response> => {
-  let timeoutId: number | undefined = undefined;
+  let timeoutId: number | undefined;
+
+  // Skip during build and initialize utilities lazily
+  const { isBuildMode } = await import("../../utils/is-build.ts");
+  if (isBuildMode()) {
+    return new Response(
+      JSON.stringify({ error: "Service unavailable during build" }),
+      { status: 503, headers: JSON_HEADERS }
+    );
+  }
+
+  // Lazy initialization
+  if (!deckCache) {
+    deckCache = new DeckCache();
+    rateLimiter = new RateLimiter();
+  }
+
+  // From this point on, we know these are initialized
+  const validDeckCache = deckCache!;
+  const validRateLimiter = rateLimiter!;
 
   try {
+    // Extract deck ID from URL
     const url = new URL(req.url);
     const deckId = url.searchParams.get("id");
+    if (!deckId) return createError("No deck ID provided");
 
-    if (!deckId) {
-      return new Response(
-        JSON.stringify({ error: "No deck ID provided" } as ErrorResponse),
-        {
-          status: 400,
-          headers: JSON_HEADERS,
-        },
+    // Check rate limits
+    const clientIp = req.headers.get("x-forwarded-for") ||
+      req.headers.get("cf-connecting-ip") ||
+      "unknown";
+
+    const rateLimit = validRateLimiter.check(clientIp);
+    if (!rateLimit.allowed) {
+      return createError(
+        "Rate limit exceeded. Please try again later.",
+        429,
+        { headers: rateLimit.headers },
       );
     }
 
-    // Rate limiting logic
-    const clientIp = req.headers.get("x-forwarded-for") ||
-      req.headers.get("cf-connecting-ip") || "unknown";
-
-    const rateLimit = rateLimiter.check(clientIp);
-    if (!rateLimit.allowed) {
+    // Check cache first
+    const cachedDeck = validDeckCache.get(deckId);
+    if (cachedDeck) {
       return new Response(
-        JSON.stringify({
-          error: "Rate limit exceeded. Please try again later.",
-          retryAfter: Math.ceil((rateLimit.timeUntilReset || 0) / 1000),
-        } as ErrorResponse),
+        JSON.stringify(cachedDeck),
         {
-          status: 429,
           headers: {
             ...JSON_HEADERS,
             ...rateLimit.headers,
+            "X-Cache": "HIT",
           },
         },
       );
     }
 
-    // Check cache
-    const cachedDeck = _deckCache.get(deckId);
-    if (cachedDeck) {
-      return new Response(
-        JSON.stringify(cachedDeck),
-        { 
-          headers: { 
-            ...JSON_HEADERS,
-            ...rateLimit.headers,
-            "X-Cache": "HIT"
-          }
-        },
-      );
-    }
-
-    // Fetch the deck from Moxfield API with timeout and retry logic
-    const maxRetries = 3;
+    // Fetch deck with retries
     let retries = 0;
     let moxfieldData: MoxfieldResponse | undefined;
 
-    while (retries <= maxRetries) {
+    while (retries <= REQUEST_CONFIG.maxRetries) {
       try {
         const controller = new AbortController();
-        const timeoutMs = 10000 + (retries * 5000); // Increase timeout with each retry
+        const timeoutMs = calculateBackoff(retries);
 
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         if (retries > 0 && !Deno.env.get("DENO_DEPLOYMENT_ID")) {
           console.log(
-            `Retrying fetch for deck with ID: ${deckId} (attempt ${retries}/${maxRetries})`,
+            `Retrying fetch for deck with ID: ${deckId} (attempt ${retries}/${REQUEST_CONFIG.maxRetries})`,
           );
-        } else if (!Deno.env.get("DENO_DEPLOYMENT_ID")) {
-          console.log(`Fetching deck with ID: ${deckId}`);
         }
 
-        const response = await fetch(
-          `https://api.moxfield.com/v2/decks/all/${deckId}`,
-          {
-            signal: controller.signal,
-            headers: {
-              "Accept": "application/json",
-              "User-Agent": "PHL-Legality-Checker",
-            },
-            cache: "force-cache",
-            keepalive: true,
-          },
-        );
-
+        const response = await fetchDeckFromMoxfield(deckId, controller);
         clearTimeout(timeoutId);
         timeoutId = undefined;
 
-        if (!Deno.env.get("DENO_DEPLOYMENT_ID")) {
-          console.log(
-            `Fetched deck: https://api.moxfield.com/v2/decks/all/${deckId}`,
-          );
-        }
-
         if (!response.ok) {
-          if (response.status === 429 && retries < maxRetries) {
+          if (response.status === 429 && retries < REQUEST_CONFIG.maxRetries) {
             retries++;
-            const backoffTime = 1000 * Math.pow(2, retries);
-            await new Promise((resolve) => setTimeout(resolve, backoffTime));
+            await new Promise((resolve) => setTimeout(resolve, calculateBackoff(retries)));
             continue;
           }
 
-          return new Response(
-            JSON.stringify({
-              error: `Failed to fetch deck: ${response.statusText}`,
-            } as ErrorResponse),
-            {
-              status: response.status,
-              headers: { ...JSON_HEADERS, ...rateLimit.headers },
-            },
+          return createError(
+            `Failed to fetch deck: ${response.statusText}`,
+            response.status,
+            { headers: rateLimit.headers },
           );
         }
 
         moxfieldData = await response.json() as MoxfieldResponse;
         break;
-      } catch (fetchError: unknown) {
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = undefined;
-
-        if (fetchError instanceof Error) {
-          if (
-            fetchError.name === "AbortError" ||
-            fetchError.name === "TypeError" ||
-            fetchError.message.includes("network")
-          ) {
-            retries++;
-            if (retries <= maxRetries) {
-              const backoffTime = 1000 * Math.pow(2, retries);
-              await new Promise((resolve) => setTimeout(resolve, backoffTime));
-              continue;
-            }
-
-            return new Response(
-              JSON.stringify(
-                {
-                  error: "Request timeout or network error fetching deck from Moxfield",
-                } as ErrorResponse,
-              ),
-              {
-                status: 504,
-                headers: { ...JSON_HEADERS, ...rateLimit.headers },
-              },
-            );
-          }
-        }
-
-        throw fetchError;
-      } finally {
+      } catch (error) {
         if (timeoutId) {
           clearTimeout(timeoutId);
           timeoutId = undefined;
         }
+
+        if (error instanceof Error) {
+          const isNetworkError = 
+            error.name === "AbortError" ||
+            error.name === "TypeError" ||
+            error.message.includes("network");
+
+          if (isNetworkError && retries < REQUEST_CONFIG.maxRetries) {
+            retries++;
+            await new Promise((resolve) => setTimeout(resolve, calculateBackoff(retries)));
+            continue;
+          }
+
+          if (isNetworkError) {
+            return createError(
+              "Request timeout or network error fetching deck from Moxfield",
+              504,
+              { headers: rateLimit.headers },
+            );
+          }
+        }
+
+        throw error;
       }
     }
 
     if (!moxfieldData) {
-      return new Response(
-        JSON.stringify(
-          {
-            error: "Failed to fetch deck after multiple attempts",
-          } as ErrorResponse,
-        ),
-        {
-          status: 500,
-          headers: { ...JSON_HEADERS, ...rateLimit.headers },
-        },
+      return createError(
+        "Failed to fetch deck after multiple attempts",
+        500,
+        { headers: rateLimit.headers },
       );
     }
 
+    // Process and validate deck data
     const processedDeck = processMoxfieldData(moxfieldData);
 
     if (!processedDeck.commander) {
-      return new Response(
-        JSON.stringify(
-          { error: "No commander found in deck" } as ErrorResponse,
-        ),
-        {
-          status: 400,
-          headers: { ...JSON_HEADERS, ...rateLimit.headers },
-        },
+      return createError(
+        "No commander found in deck",
+        400,
+        { headers: rateLimit.headers },
       );
     }
 
     if (processedDeck.cards.length === 0) {
-      return new Response(
-        JSON.stringify(
-          { error: "Deck contains no cards in the mainboard" } as ErrorResponse,
-        ),
-        {
-          status: 400,
-          headers: { ...JSON_HEADERS, ...rateLimit.headers },
-        },
+      return createError(
+        "Deck contains no cards in the mainboard",
+        400,
+        { headers: rateLimit.headers },
       );
     }
 
-    // Cache the processed deck
-    _deckCache.set(deckId, processedDeck);
+    // Cache the validated deck
+    validDeckCache.set(deckId, processedDeck);
 
     return new Response(
       JSON.stringify(processedDeck as SuccessResponse),
@@ -250,19 +253,13 @@ export const handler = async (
         },
       },
     );
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Error fetching deck:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({ error: errorMessage } as ErrorResponse),
-      {
-        status: 500,
-        headers: JSON_HEADERS,
-      },
+    return createError(
+      error instanceof Error ? error.message : String(error),
+      500,
     );
   } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    if (timeoutId) clearTimeout(timeoutId);
   }
 };

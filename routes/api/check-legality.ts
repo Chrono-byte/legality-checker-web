@@ -1,231 +1,245 @@
 import { FreshContext } from "$fresh/server.ts";
-import { IScryfallColor } from "npm:scryfall-types";
-import _CardManager from "../../load-data/load-cards.ts";
+import { IScryfallCard } from "npm:scryfall-types";
+import CardManager from "../../load-data/CardManager.ts";
 
-// Define types for card and deck data
+// Types
 interface Card {
   quantity: number;
   name: string;
 }
 
-// Initialize card manager
-// const cardManager = new CardManager();
+interface DeckLegalityRequest {
+  cards: Card[];
+  commander: Card;
+}
 
-// Common response headers for consistent API responses
+interface LegalityChecks {
+  size: boolean;
+  commander: boolean;
+  colorIdentity: boolean;
+  singleton: boolean;
+  illegalCards: boolean;
+}
+
+interface LegalityResponse {
+  legal: boolean;
+  commander: string;
+  colorIdentity: string[];
+  deckSize: number;
+  requiredSize: number;
+  illegalCards: string[];
+  colorIdentityViolations: string[];
+  nonSingletonCards: string[];
+  legalIssues: {
+    size: string | null;
+    commander: string | null;
+    commanderType: string | null;
+    colorIdentity: string | null;
+    singleton: string | null;
+    illegalCards: string | null;
+  };
+  error?: string;
+}
+
+// Constants
 const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
+
+const BASIC_LANDS = new Set([
+  "Plains",
+  "Island",
+  "Swamp",
+  "Mountain",
+  "Forest",
+  "Wastes",
+]);
+
+// Helper functions
+const createError = (message: string, status = 400) => new Response(
+  JSON.stringify({ error: message }),
+  { status, headers: JSON_HEADERS },
+);
+
+const checkCommander = (commander: Card, commanderData: IScryfallCard | null): Response | null => {
+  if (!commanderData) {
+    return new Response(
+      JSON.stringify({
+        legal: false,
+        commander: commander.name,
+        error: "Commander not found in database",
+      }),
+      { headers: JSON_HEADERS },
+    );
+  }
+
+  if (!commanderData.type_line.toLowerCase().includes("creature")) {
+    return new Response(
+      JSON.stringify({
+        legal: false,
+        commander: commander.name,
+        error: "Commander must be a creature",
+        legalIssues: { commanderType: "Commander must be a creature" },
+      }),
+      { headers: JSON_HEADERS },
+    );
+  }
+
+  if (!commanderData.type_line.toLowerCase().includes("legendary")) {
+    return new Response(
+      JSON.stringify({
+        legal: false,
+        commander: commander.name,
+        error: "Commander must be legendary",
+        legalIssues: { commanderType: "Commander must be legendary" },
+      }),
+      { headers: JSON_HEADERS },
+    );
+  }
+
+  return null;
+};
+
+// Initialize card manager
+const cardManager = new CardManager();
 
 export const handler = async (
   req: Request,
   _ctx: FreshContext,
 ): Promise<Response> => {
-  try {
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: JSON_HEADERS,
-      });
-    }
-
-    // Parse the request body with timeout handling
-    let body;
-    try {
-      body = await req.json();
-    } catch (parseError: unknown) {
-      const errorMessage = parseError instanceof Error
-        ? parseError.message
-        : String(parseError);
-      return new Response(
-        JSON.stringify({
-          error: `Failed to parse request body: ${errorMessage}`,
-        }),
-        {
-          status: 400,
-          headers: JSON_HEADERS,
-        },
-      );
-    }
-
-    const { cards, commander } = body;
-
-    if (!cards || !commander) {
-      return new Response(JSON.stringify({ error: "Invalid deck data" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Get commander card data
-    const commanderData = cardManager.fetchCard(commander.name);
-    if (!commanderData) {
-      return new Response(
-        JSON.stringify({
-          legal: false,
-          commander: commander.name,
-          error: "Commander not found in database",
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Check if commander is a creature
-    if (!commanderData.type_line.toLowerCase().includes("creature")) {
-      return new Response(
-        JSON.stringify({
-          legal: false,
-          commander: commander.name,
-          error: "Commander must be a creature",
-          legalIssues: {
-            commanderType: "Commander must be a creature",
-          },
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Test decklist for legality
-    const [_legalCards, illegalCards] = cardManager.testDecklist(
-      cards,
-      commander,
+  // Skip during build
+  const { isBuildMode } = await import("../../utils/is-build.ts");
+  if (isBuildMode()) {
+    return new Response(
+      JSON.stringify({ error: "Service unavailable during build" }),
+      { status: 503, headers: JSON_HEADERS },
     );
+  };
+  try {
+    // Validate request method
+    if (req.method !== "POST") {
+      return createError("Method not allowed", 405);
+    }
 
-    // Total card quantities
-    let cardQuantities = 0;
-    cards.forEach((card: Card) => {
-      cardQuantities += card.quantity;
-    });
+    // Parse request body with timeout handling
+    let body: DeckLegalityRequest;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const clonedReq = req.clone();
+      body = await clonedReq.json();
+      clearTimeout(timeoutId);
+    } catch (parseError) {
+      return createError(`Failed to parse request body: ${String(parseError)}`);
+    }
 
-    // Check basic legality conditions
-    const legalChecks = {
-      size: cardQuantities + commander.quantity === 100,
-      commander: commanderData.legalities.pioneer === "legal",
-      colorIdentity: true, // Start as true and check below
-      singleton: true, // Start as true and check below
-      legality: illegalCards.length === 0, // Are all cards legal in format
+    // Validate request data
+    const { cards, commander } = body;
+    if (!cards?.length || !commander) {
+      return createError("Invalid deck data");
+    }
+
+    // Validate commander and cache it
+    const commanderData = cardManager.fetchCard(commander.name);
+    const commanderError = checkCommander(commander, commanderData);
+    if (commanderError) return commanderError;
+    
+    // We can now safely assert commanderData is not null since checkCommander would have returned
+    const validCommanderData = commanderData as IScryfallCard;
+
+    // Get deck legality information
+    const [_legalCards, illegalCards] = cardManager.testDecklist(cards, commander);
+
+    // Calculate total cards
+    const cardQuantities = cards.reduce((total, card) => total + card.quantity, 0);
+    const totalCards = cardQuantities + commander.quantity;
+
+    // Initialize legality checks
+    const legalChecks: LegalityChecks = {
+      size: totalCards === 100,
+      commander: validCommanderData.legalities.pioneer === "legal",
+      colorIdentity: true,
+      singleton: true,
+      illegalCards: illegalCards.length === 0,
     };
 
-    // Check cards that violate singleton format
-    const cardCounts: Record<string, number> = {};
-    const basicLandNames = [
-      "Plains",
-      "Island",
-      "Swamp",
-      "Mountain",
-      "Forest",
-      "Wastes",
-    ];
-    const nonSingletonCards: string[] = [];
+    // Check singleton rule violations
+    const nonSingletonCards = new Set<string>();
+    const cardCounts = new Map<string, number>();
 
-    // Check for duplicate cards (except basic lands and singleton exceptions)
-    cards.forEach((card: Card) => {
-      // Skip basic lands for singleton check
-      if (basicLandNames.includes(card.name)) {
-        return;
-      }
-
-      // Skip singleton exceptions
-      if (cardManager.isAllowedToBreakSingletonRule(card.name)) {
-        return;
-      }
-
-      if (!cardCounts[card.name]) {
-        cardCounts[card.name] = 0;
-      }
-      cardCounts[card.name] += card.quantity;
-
-      // Check if any card has more than MAX_CARDS_PER_CARD
-      if (cardCounts[card.name] > 1) {
-        legalChecks.singleton = false;
-        nonSingletonCards.push(card.name);
-      }
-    });
-
-    // Check color identity
-    const colorIdentity = commanderData.color_identity;
-    const colorIdentityViolations: string[] = [];
-
-    cards.forEach((card: Card) => {
-      const cardData = cardManager.fetchCard(card.name);
-      if (cardData) {
-        if (
-          !cardData.color_identity.every((color: IScryfallColor) =>
-            colorIdentity.includes(color)
-          )
-        ) {
-          legalChecks.colorIdentity = false;
-          colorIdentityViolations.push(card.name);
+    for (const card of cards) {
+      if (!BASIC_LANDS.has(card.name) && !cardManager.singletonExceptions.includes(card.name)) {
+        const count = (cardCounts.get(card.name) || 0) + card.quantity;
+        cardCounts.set(card.name, count);
+        if (count > 1) {
+          legalChecks.singleton = false;
+          nonSingletonCards.add(card.name);
         }
       }
-    });
+    }
 
-    // Check if any cards are marked as reserved list
-    const reservedListCards: string[] = [];
-    cards.forEach((card: Card) => {
-      const cardData = cardManager.fetchCard(card.name);
-      if (cardData && cardData.reserved) {
-        reservedListCards.push(card.name);
+    // Check color identity violations
+    const colorIdentity = new Set(validCommanderData.color_identity);
+    const colorIdentityViolations = new Set<string>();
+    const cardDataCache = new Map<string, IScryfallCard>();
+
+    for (const card of cards) {
+      let cardData = cardDataCache.get(card.name);
+      if (!cardData) {
+        const fetchedCard = cardManager.fetchCard(card.name);
+        if (fetchedCard !== null) {
+          cardDataCache.set(card.name, fetchedCard);
+          cardData = fetchedCard;
+        } else {
+          cardData = undefined;
+        }
       }
-    });
+
+      if (cardData && !cardData.color_identity.every(color => colorIdentity.has(color))) {
+        legalChecks.colorIdentity = false;
+        colorIdentityViolations.add(card.name);
+      }
+    }
 
     // Determine overall legality
-    const isLegal = legalChecks.size &&
-      legalChecks.commander &&
-      legalChecks.colorIdentity &&
-      legalChecks.singleton &&
-      illegalCards.length === 0;
+    const isLegal = Object.values(legalChecks).every(check => check);
+
+    // Construct response
+    const response: LegalityResponse = {
+      legal: isLegal,
+      commander: commander.name,
+      colorIdentity: Array.from(colorIdentity),
+      deckSize: totalCards,
+      requiredSize: 100,
+      illegalCards,
+      colorIdentityViolations: Array.from(colorIdentityViolations),
+      nonSingletonCards: Array.from(nonSingletonCards),
+      legalIssues: {
+        size: !legalChecks.size 
+          ? `Deck size incorrect: has ${totalCards} cards, needs 100` 
+          : null,
+        commander: !legalChecks.commander
+          ? "Commander not legal in Pioneer"
+          : null,
+        commanderType: null,
+        colorIdentity: !legalChecks.colorIdentity
+          ? "Cards outside commander's color identity"
+          : null,
+        singleton: !legalChecks.singleton
+          ? "Deck contains multiple copies of non-basic land cards that aren't allowed to break the singleton rule"
+          : null,
+        illegalCards: !legalChecks.illegalCards
+          ? "Deck contains cards that aren't legal in the format"
+          : null,
+      },
+    };
 
     return new Response(
-      JSON.stringify({
-        legal: isLegal,
-        commander: commander.name,
-        colorIdentity: commanderData.color_identity,
-        deckSize: cardQuantities + commander.quantity,
-        requiredSize: 100,
-        illegalCards: illegalCards,
-        colorIdentityViolations: colorIdentityViolations,
-        nonSingletonCards: nonSingletonCards,
-        reservedListCards: reservedListCards,
-        legalIssues: {
-          size: !legalChecks.size
-            ? `Deck size incorrect: has ${
-              cardQuantities + commander.quantity
-            } cards, needs ${100}`
-            : null,
-          commander: !legalChecks.commander
-            ? "Commander not legal in Pioneer"
-            : null,
-          colorIdentity: !legalChecks.colorIdentity
-            ? "Cards outside commander's color identity"
-            : null,
-          singleton: !legalChecks.singleton
-            ? "Deck contains multiple copies of non-basic land cards that aren't allowed to break the singleton rule"
-            : null,
-          illegalCards: illegalCards.length > 0
-            ? "Deck contains cards that aren't legal in the format"
-            : null,
-          reservedList: reservedListCards.length > 0
-            ? "Deck contains cards from the Reserved List"
-            : null,
-        },
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      },
+      JSON.stringify(response),
+      { headers: JSON_HEADERS },
     );
   } catch (error: unknown) {
     console.error("Error checking deck legality:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    return createError(error instanceof Error ? error.message : String(error), 500);
   }
 };

@@ -77,6 +77,7 @@ export default function DeckLegalityChecker() {
       const legalityResult = await checkPHLLegality(decklist);
 
       // Update UI with results
+      console.log('Legality check result:', legalityResult);
       setResult(legalityResult);
       setCommander(legalityResult.commander);
       setColorIdentity(legalityResult.colorIdentity || []);
