@@ -125,14 +125,9 @@ export const handler = async (
     const deckId = url.searchParams.get("id");
     if (!deckId) return createError("No deck ID provided");
     // Semi-verbose log: client and deck information
-    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
-    console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
-
-    // Check rate limits
     const clientIp = req.headers.get("x-forwarded-for") ||
       req.headers.get("cf-connecting-ip") ||
       "unknown";
-    // Semi-verbose log: client and deck information
     console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
 
     const rateLimit = validRateLimiter.check(clientIp);
