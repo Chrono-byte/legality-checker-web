@@ -4,5 +4,7 @@
  * @returns {boolean} True if running in build mode, false otherwise
  */
 export function isBuildMode(): boolean {
+  console.log("Deno.args", Deno.args);
+
   return Deno.args.includes("build");
 }

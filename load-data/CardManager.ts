@@ -89,15 +89,12 @@ export default class CardManager {
   private readonly allowedList: string[];
   /** List of cards allowed to have multiple copies */
   private readonly singletonExceptions: string[];
-  /** Cache of card legality results */
-  private readonly cardLegality: Map<string, boolean>;
 
   constructor() {
     this.cards = [];
     this.bannedList = bannedListArray;
     this.allowedList = allowedListArray;
     this.singletonExceptions = singletonExceptionsArray;
-    this.cardLegality = new Map();
 
     // If running in a non-build mode, load cards from cache or download them
     // This is to avoid loading cards during static generation
@@ -117,6 +114,11 @@ export default class CardManager {
       this.cards = JSON.parse(data) as IScryfallCard[];
       console.log(`Loaded ${this.cards.length} cards from cards.json`);
     } catch (error) {
+      // During build, we should never try to download cards
+      if (isBuildMode()) {
+        throw new Error("Card data is required for build but cards.json was not found. Please run the development server first to download card data.");
+      }
+
       if (error instanceof Deno.errors.NotFound) {
         console.log("cards.json not found, downloading cards...");
         await this.downloadCards();
@@ -135,10 +137,10 @@ export default class CardManager {
    * @param retryCount Number of retries for failed requests
    * @throws Error if card data cannot be downloaded after all retries
    */
-  private async downloadCards(retryCount = 1): Promise<void> {
+  private async downloadCards(retryCount = 3): Promise<void> {
     try {
       const controller = new AbortController();
-      const timeoutMs = 30000;
+      const timeoutMs = 60000; // Increased timeout to 60 seconds
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       console.log("Fetching Scryfall bulk data information...");
@@ -191,21 +193,30 @@ export default class CardManager {
       console.log("Successfully processed and saved card data");
     } catch (error) {
       console.error("Error fetching bulk card data:", error);
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+      }
       if (retryCount > 0) {
+        const delayMs = (4 - retryCount) * 5000; // Exponential backoff: 5s, 10s, 15s
         console.log(
-          `Retrying download... (${retryCount - 1} attempts remaining)`,
+          `Retrying download in ${delayMs / 1000}s... (${
+            retryCount - 1
+          } attempts remaining)`,
         );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         await this.downloadCards(retryCount - 1);
       } else {
         throw new Error(
-          "Failed to download card data after all retry attempts",
+          `Failed to download card data after all retry attempts: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         );
       }
     }
   }
 
   /**
-   * Fetches bulk data from Scryfall API
+   * Fetches bulk data from Scryfall API with improved error handling
    * @param signal AbortSignal for request cancellation
    * @param retryCount Number of retries for failed requests
    */
@@ -219,35 +230,50 @@ export default class CardManager {
         signal,
         headers: {
           "Accept": "application/json",
-          "User-Agent": "PHL-Legality-Checker",
+          "User-Agent": "PHL-Legality-Checker/1.0",
         },
-        cache: "force-cache",
       },
       retryCount,
     );
 
-    const data = await response.json();
-    const bulkDataUrl = data.download_uri;
+    if (!response.ok) {
+      throw new Error(
+        `HTTP error! status: ${response.status} - ${await response.text()}`,
+      );
+    }
 
+    const data = await response.json();
+    if (!data.download_uri) {
+      throw new Error("No download URI found in Scryfall bulk data response");
+    }
+
+    const bulkDataUrl = data.download_uri;
     console.log("Fetching bulk card data from:", bulkDataUrl);
+
     const bulkDataResponse = await this.fetchWithRetry(
       bulkDataUrl,
       {
         signal,
         headers: {
           "Accept": "application/json",
-          "User-Agent": "PHL-Legality-Checker",
+          "User-Agent": "PHL-Legality-Checker/1.0",
         },
-        cache: "force-cache",
       },
       retryCount,
     );
+
+    if (!bulkDataResponse.ok) {
+      throw new Error(
+        `HTTP error! status: ${bulkDataResponse.status} - ${await bulkDataResponse
+          .text()}`,
+      );
+    }
 
     return await bulkDataResponse.json() as IScryfallCard[];
   }
 
   /**
-   * Fetches data with retry logic
+   * Fetches data with retry logic and exponential backoff
    * @param url URL to fetch from
    * @param options Fetch options
    * @param maxRetries Maximum number of retries
@@ -260,17 +286,23 @@ export default class CardManager {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await fetch(url, options);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
         return response;
       } catch (error) {
-        if (attempt === maxRetries) throw error;
-        console.log(`Attempt ${attempt} failed, retrying...`);
-        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        if (attempt === maxRetries) {
+          throw new Error(
+            `Failed to fetch from ${url}: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          );
+        }
+        const delayMs = attempt * 5000; // Exponential backoff: 5s, 10s, 15s
+        console.log(
+          `Attempt ${attempt} failed, retrying in ${delayMs / 1000}s...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
-    throw new Error("All retry attempts failed");
+    throw new Error(`All ${maxRetries} retry attempts failed for ${url}`);
   }
 
   /**
