@@ -14,17 +14,21 @@ const singletonExceptions = await Deno.readTextFile(
   new URL("./singleton_exceptions.csv", import.meta.url),
 );
 
-// parse the lists into arrays of card names, we must also parse each line as a string as they are wrapped in quotes
-// we should also check that there aren't more than 1 column in the csv
-const bannedListArray = bannedList.split("\n").map((line) =>
-  line.replace(/"/g, "")
-);
-const allowedListArray = allowedList.split("\n").map((line) =>
-  line.replace(/"/g, "")
-);
-const singletonExceptionsArray = singletonExceptions.split("\n").map((line) =>
-  line.replace(/"/g, "").trim()
-).filter(Boolean); // Filter out any empty lines
+// Parse CSV lists into arrays of card names, removing quotes and trimming whitespace
+const bannedListArray = bannedList
+  .split("\n")
+  .map((line) => line.replace(/"/g, "").trim())
+  .filter(Boolean);
+
+const allowedListArray = allowedList
+  .split("\n")
+  .map((line) => line.replace(/"/g, "").trim())
+  .filter(Boolean);
+
+const singletonExceptionsArray = singletonExceptions
+  .split("\n")
+  .map((line) => line.replace(/"/g, "").trim())
+  .filter(Boolean);
 
 export default class CardManager {
   cards: IScryfallCard[];
@@ -37,60 +41,26 @@ export default class CardManager {
     this.allowedList = allowedListArray;
     this.singletonExceptions = singletonExceptionsArray;
 
-    this.init().then(() => {
-      console.log("Card manager initialized");
-    });
-  }
-
-  async init() {
-    // try to load cards from disk for n times where n is the number of attempts we allow
-    for (let i = 0; i < 1; i++) {
-      try {
-        this.loadCards();
-      } catch (error) {
-        console.error("Error loading cards from disk:", error);
-        await this.downloadCards();
-      }
-    }
+    this.loadCards();
   }
 
   loadCards() {
-    // check if cards.json exists
-    Deno.statSync(
-      new URL("./cards.json", import.meta.url),
-    );
-
-    // read cards.json
-    this.cards = JSON.parse(
-      Deno.readTextFileSync(
-        new URL("./cards.json", import.meta.url),
-      ),
-    ) as IScryfallCard[];
-
-    // date>=rtr f:edh game:paper
-    const pdhCards = this.cards.filter((
-      card: IScryfallCard,
-    ) => {
-      // check if card is legal in pioneer and is a paper card
-      if (
-        (card.legalities.pioneer === "legal" && card.games.includes("paper")) ||
-        (allowedListArray.includes(card.name) && card.games.includes("paper"))
-      ) {
-        return true;
+    try {
+      this.cards = JSON.parse(
+        Deno.readTextFileSync(
+          new URL("./cards.json", import.meta.url),
+        ),
+      ) as IScryfallCard[];
+      
+      console.log("Loaded cards from cards.json");
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        console.log("cards.json not found, downloading cards...");
+        this.downloadCards();
+      } else {
+        console.error("Error loading cards:", error);
       }
-      return false;
-    });
-
-    // filter out cards that are banned in pdh
-    const pdhPoolFiltered = pdhCards.filter((card) => {
-      if (this.bannedList.includes(card.name)) {
-        return false;
-      }
-      return true;
-    });
-
-    // push to cards array
-    this.cards = pdhPoolFiltered;
+    }
   }
 
   async downloadCards() {
@@ -99,11 +69,11 @@ export default class CardManager {
       const controller = new AbortController();
       let timeoutId: number | undefined;
       const timeoutMs = 30000; // Generous timeout for large data
-      
+
       timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      
+
       console.log("Fetching Scryfall bulk data information...");
-      
+
       // deno fetch bulk card data from scryfall api with improved error handling
       const response = await fetch(
         "https://api.scryfall.com/bulk-data/oracle-cards",
@@ -116,13 +86,15 @@ export default class CardManager {
           // HTTP/2 optimizations
           cache: "force-cache", // Use cache when possible
           keepalive: true, // Keep connection alive for better performance
-        }
+        },
       );
 
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch bulk card data: ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch bulk card data: ${response.statusText}`,
+        );
       }
 
       const data = await response.json();
@@ -133,43 +105,63 @@ export default class CardManager {
       console.log("Fetching bulk card data from:", bulkDataUrl);
 
       // Set a new timeout for the actual bulk data download
-      const bulkController = new AbortController(); 
+      const bulkController = new AbortController();
       timeoutId = setTimeout(() => bulkController.abort(), 120000); // 2 minute timeout for bulk download
-      
+
       // fetch bulk card data with improved error handling
       const bulkDataResponse = await fetch(bulkDataUrl, {
         signal: bulkController.signal,
         headers: {
-          "Accept": "application/json", 
+          "Accept": "application/json",
           "User-Agent": "PHL-Legality-Checker",
         },
         cache: "force-cache",
       });
 
       clearTimeout(timeoutId);
-      
+
       if (!bulkDataResponse.ok) {
-        throw new Error(`Failed to fetch bulk card data: ${bulkDataResponse.statusText}`);
+        throw new Error(
+          `Failed to fetch bulk card data: ${bulkDataResponse.statusText}`,
+        );
       }
 
-      const bulkData = await bulkDataResponse.json();
+      const bulkData = await bulkDataResponse.json() as IScryfallCard[];
 
-      console.log(`Successfully downloaded ${bulkData.length} cards from Scryfall`);
-      
-      // write to disk
-      await Deno.writeTextFile(
-        new URL("./cards.json", import.meta.url),
-        JSON.stringify(bulkData, null, 2),
+      console.log(
+        `Successfully downloaded ${bulkData.length} cards from Scryfall`,
       );
 
-      // check read
-      const cards = JSON.parse(
-        await Deno.readTextFile(
-          new URL("./cards.json", import.meta.url),
-        ),
-      ) as IScryfallCard[];
+      // date>=rtr f:edh game:paper
+      const pdhCards = bulkData.filter((card: IScryfallCard) => {
+        // check if card is legal in pioneer and is a paper card
+        if (
+          (card.legalities.pioneer === "legal" &&
+            card.games.includes("paper")) ||
+          (allowedListArray.includes(card.name) && card.games.includes("paper"))
+        ) {
+          return true;
+        }
+        return false;
+      });
 
-      console.log("Fetched bulk card data:", cards.length);
+      // filter out cards that are banned in pdh
+      const pdhPoolFiltered = pdhCards.filter((card: IScryfallCard) => {
+        if (this.bannedList.includes(card.name)) {
+          return false;
+        }
+        return true;
+      });
+
+      // write filtered data to disk
+      await Deno.writeTextFile(
+        new URL("./cards.json", import.meta.url),
+        JSON.stringify(pdhPoolFiltered, null, 2),
+      );
+
+      this.loadCards();
+
+      console.log("Fetched bulk card data:", pdhPoolFiltered.length);
     } catch (error) {
       console.error("Error fetching bulk card data:", error);
     }

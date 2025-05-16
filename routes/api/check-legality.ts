@@ -1,5 +1,6 @@
 import { FreshContext } from "$fresh/server.ts";
-import CardManager from "../../load-data/load-cards.ts";
+import { IScryfallColor } from "npm:scryfall-types";
+import _CardManager from "../../load-data/load-cards.ts";
 
 // Define types for card and deck data
 interface Card {
@@ -7,15 +8,12 @@ interface Card {
   name: string;
 }
 
-// Define deck building restrictions
-const DECK_SIZE_REQUIREMENT = 100;
-
 // Initialize card manager
-const cardManager = new CardManager();
+// const cardManager = new CardManager();
 
 // Common response headers for consistent API responses
 const JSON_HEADERS = {
-  "Content-Type": "application/json"
+  "Content-Type": "application/json",
 };
 
 export const handler = async (
@@ -35,15 +33,20 @@ export const handler = async (
     try {
       body = await req.json();
     } catch (parseError: unknown) {
-      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-      return new Response(JSON.stringify({ 
-        error: `Failed to parse request body: ${errorMessage}` 
-      }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
+      const errorMessage = parseError instanceof Error
+        ? parseError.message
+        : String(parseError);
+      return new Response(
+        JSON.stringify({
+          error: `Failed to parse request body: ${errorMessage}`,
+        }),
+        {
+          status: 400,
+          headers: JSON_HEADERS,
+        },
+      );
     }
-    
+
     const { cards, commander } = body;
 
     if (!cards || !commander) {
@@ -99,7 +102,7 @@ export const handler = async (
 
     // Check basic legality conditions
     const legalChecks = {
-      size: cardQuantities + commander.quantity === DECK_SIZE_REQUIREMENT,
+      size: cardQuantities + commander.quantity === 100,
       commander: commanderData.legalities.pioneer === "legal",
       colorIdentity: true, // Start as true and check below
       singleton: true, // Start as true and check below
@@ -150,7 +153,7 @@ export const handler = async (
       const cardData = cardManager.fetchCard(card.name);
       if (cardData) {
         if (
-          !cardData.color_identity.every((color) =>
+          !cardData.color_identity.every((color: IScryfallColor) =>
             colorIdentity.includes(color)
           )
         ) {
@@ -182,7 +185,7 @@ export const handler = async (
         commander: commander.name,
         colorIdentity: commanderData.color_identity,
         deckSize: cardQuantities + commander.quantity,
-        requiredSize: DECK_SIZE_REQUIREMENT,
+        requiredSize: 100,
         illegalCards: illegalCards,
         colorIdentityViolations: colorIdentityViolations,
         nonSingletonCards: nonSingletonCards,
@@ -191,7 +194,7 @@ export const handler = async (
           size: !legalChecks.size
             ? `Deck size incorrect: has ${
               cardQuantities + commander.quantity
-            } cards, needs ${DECK_SIZE_REQUIREMENT}`
+            } cards, needs ${100}`
             : null,
           commander: !legalChecks.commander
             ? "Commander not legal in Pioneer"

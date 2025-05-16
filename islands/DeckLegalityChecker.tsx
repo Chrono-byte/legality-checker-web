@@ -20,7 +20,6 @@ interface LegalityResult {
   illegalCards?: string[];
   colorIdentityViolations?: string[];
   nonSingletonCards?: string[];
-  reservedListCards?: string[];
   legalIssues?: {
     size?: string | null;
     commander?: string | null;
@@ -28,18 +27,13 @@ interface LegalityResult {
     colorIdentity?: string | null;
     singleton?: string | null;
     illegalCards?: string | null;
-    reservedList?: string | null;
   };
   error?: string;
   deckSize?: number;
   requiredSize?: number;
 }
 
-interface DeckCheckerProps {
-  initialDecklist?: Decklist;
-}
-
-export default function DeckLegalityChecker(_props: DeckCheckerProps) {
+export default function DeckLegalityChecker() {
   const [deckUrl, setDeckUrl] = useState<string>("");
   const [legalityStatus, setLegalityStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -114,7 +108,7 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
       try {
         // Increase timeout with each retry
         const timeoutMs = 15000 + (retries * 5000);
-        
+
         // Clear any existing timeout
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -122,7 +116,7 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
         // Fetch deck data with proper error handling
         const response = await fetch(
           `/api/fetch-deck?id=${encodeURIComponent(deckId)}`,
-          { 
+          {
             signal: controller.signal,
             // Add HTTP/2 optimizations
             cache: "default", // Use browser's standard cache behavior
@@ -143,15 +137,15 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
             const retryAfter = response.headers.get("Retry-After") ||
               data.retryAfter || "60";
             const seconds = parseInt(retryAfter, 10);
-            
+
             if (retries < maxRetries) {
               retries++;
               // Use the retry-after value or exponential backoff
               const waitTime = seconds * 1000 || Math.pow(2, retries) * 1000;
-              await new Promise(resolve => setTimeout(resolve, waitTime));
+              await new Promise((resolve) => setTimeout(resolve, waitTime));
               continue;
             }
-            
+
             throw new Error(
               `Rate limit exceeded. Please try again in ${seconds} second${
                 seconds !== 1 ? "s" : ""
@@ -169,20 +163,21 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
       } catch (error: unknown) {
         clearTimeout(timeoutId);
         timeoutId = undefined;
-        
+
         if (error instanceof Error) {
-          if (error.name === "AbortError" || 
-              error.name === "TypeError" ||
-              error.message.includes("network")) {
-            
+          if (
+            error.name === "AbortError" ||
+            error.name === "TypeError" ||
+            error.message.includes("network")
+          ) {
             retries++;
             if (retries <= maxRetries) {
               // Exponential backoff
               const backoffTime = 1000 * Math.pow(2, retries);
-              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              await new Promise((resolve) => setTimeout(resolve, backoffTime));
               continue;
             }
-            
+
             throw new Error(
               "Request timeout or network error - the server took too long to respond",
             );
@@ -191,7 +186,7 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
         throw error;
       }
     }
-    
+
     // This should never be reached due to the error handling above
     throw new Error("Failed to fetch deck after multiple attempts");
   }
@@ -207,7 +202,7 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
       try {
         // Increase timeout with each retry
         const timeoutMs = 15000 + (retries * 5000);
-        
+
         // Clear any existing timeout
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -237,15 +232,15 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
             const retryAfter = response.headers.get("Retry-After") ||
               data.retryAfter || "60";
             const seconds = parseInt(retryAfter, 10);
-            
+
             if (retries < maxRetries) {
               retries++;
               // Use the retry-after value or exponential backoff
               const waitTime = seconds * 1000 || Math.pow(2, retries) * 1000;
-              await new Promise(resolve => setTimeout(resolve, waitTime));
+              await new Promise((resolve) => setTimeout(resolve, waitTime));
               continue;
             }
-            
+
             throw new Error(
               `Rate limit exceeded. Please try again in ${seconds} second${
                 seconds !== 1 ? "s" : ""
@@ -263,27 +258,30 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
       } catch (error: unknown) {
         clearTimeout(timeoutId);
         timeoutId = undefined;
-        
+
         if (error instanceof Error) {
-          if (error.name === "AbortError" || 
-              error.name === "TypeError" ||
-              error.message.includes("network")) {
-            
+          if (
+            error.name === "AbortError" ||
+            error.name === "TypeError" ||
+            error.message.includes("network")
+          ) {
             retries++;
             if (retries <= maxRetries) {
               // Exponential backoff
               const backoffTime = 1000 * Math.pow(2, retries);
-              await new Promise(resolve => setTimeout(resolve, backoffTime));
+              await new Promise((resolve) => setTimeout(resolve, backoffTime));
               continue;
             }
-            
-            throw new Error("Request timeout - the legality check took too long");
+
+            throw new Error(
+              "Request timeout - the legality check took too long",
+            );
           }
         }
         throw error;
       }
     }
-    
+
     // This should never be reached due to the error handling above
     throw new Error("Failed to check deck legality after multiple attempts");
   }
@@ -301,7 +299,6 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
     if (legalIssues.colorIdentity) issues.push(legalIssues.colorIdentity);
     if (legalIssues.singleton) issues.push(legalIssues.singleton);
     if (legalIssues.illegalCards) issues.push(legalIssues.illegalCards);
-    if (legalIssues.reservedList) issues.push(legalIssues.reservedList);
 
     return issues;
   }
@@ -405,20 +402,6 @@ export default function DeckLegalityChecker(_props: DeckCheckerProps) {
               </h3>
               <ul class="list-disc ml-6 mt-1">
                 {result.illegalCards.map((card) => <li key={card}>{card}</li>)}
-              </ul>
-            </div>
-          )}
-
-          {/* Show Reserved List cards if any */}
-          {result?.reservedListCards && result.reservedListCards.length > 0 && (
-            <div class="mt-4">
-              <h3 class="font-bold">
-                Reserved List Cards ({result.reservedListCards.length}):
-              </h3>
-              <ul class="list-disc ml-6 mt-1">
-                {result.reservedListCards.map((card) => (
-                  <li key={card}>{card}</li>
-                ))}
               </ul>
             </div>
           )}

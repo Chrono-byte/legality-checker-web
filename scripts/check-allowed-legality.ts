@@ -28,7 +28,7 @@ async function checkPioneerLegality(cardName: string): Promise<{
       // Use AbortController for timeout
       const controller = new AbortController();
       const timeoutMs = 10000 + (retries * 5000); // Increase timeout with each retry
-      
+
       // Set timeout with proper type handling
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -45,7 +45,7 @@ async function checkPioneerLegality(cardName: string): Promise<{
           // HTTP/2 optimizations
           cache: "force-cache", // Use cache when possible
           keepalive: true, // Keep connection alive for better performance
-        }
+        },
       );
 
       clearTimeout(timeoutId);
@@ -56,15 +56,23 @@ async function checkPioneerLegality(cardName: string): Promise<{
         retries++;
         if (retries <= maxRetries) {
           const retryAfter = response.headers.get("Retry-After");
-          const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * Math.pow(2, retries);
-          console.log(`Rate limited when fetching ${cardName}. Retrying in ${waitTime / 1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          const waitTime = retryAfter
+            ? parseInt(retryAfter, 10) * 1000
+            : 1000 * Math.pow(2, retries);
+          console.log(
+            `Rate limited when fetching ${cardName}. Retrying in ${
+              waitTime / 1000
+            }s...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }
       }
 
       if (!response.ok) {
-        console.error(`Failed to fetch card: ${cardName} (${response.status}: ${response.statusText})`);
+        console.error(
+          `Failed to fetch card: ${cardName} (${response.status}: ${response.statusText})`,
+        );
         return { name: cardName, isPioneerLegal: false };
       }
 
@@ -78,28 +86,33 @@ async function checkPioneerLegality(cardName: string): Promise<{
     } catch (error) {
       clearTimeout(timeoutId);
       timeoutId = undefined;
-      
+
       if (error instanceof Error) {
         // For timeout or network errors, retry if possible
-        if (error.name === "AbortError" || 
-            error.name === "TypeError" ||
-            error.message.includes("network")) {
-          
+        if (
+          error.name === "AbortError" ||
+          error.name === "TypeError" ||
+          error.message.includes("network")
+        ) {
           retries++;
           if (retries <= maxRetries) {
             const backoffTime = 1000 * Math.pow(2, retries);
-            console.log(`Network error when fetching ${cardName}. Retrying in ${backoffTime / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, backoffTime));
+            console.log(
+              `Network error when fetching ${cardName}. Retrying in ${
+                backoffTime / 1000
+              }s...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoffTime));
             continue;
           }
         }
       }
-      
+
       console.error(`Error checking ${cardName}:`, error);
       return { name: cardName, isPioneerLegal: false };
     }
   }
-  
+
   // This will only be reached if all retries failed
   return { name: cardName, isPioneerLegal: false };
 }
@@ -118,18 +131,21 @@ const failedCards: string[] = [];
 for (let i = 0; i < allowedCards.length; i += batchSize) {
   try {
     const batch = allowedCards.slice(i, i + batchSize);
-    
+
     // Process each batch with controlled concurrency
     const batchResults = await Promise.allSettled(
-      batch.map((card: string) => checkPioneerLegality(card))
+      batch.map((card: string) => checkPioneerLegality(card)),
     );
-    
+
     // Handle results and track any failed requests
     batchResults.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         results.push(result.value);
       } else {
-        console.error(`Failed to process card: ${batch[index]}:`, result.reason);
+        console.error(
+          `Failed to process card: ${batch[index]}:`,
+          result.reason,
+        );
         failedCards.push(batch[index]);
       }
     });
@@ -137,7 +153,7 @@ for (let i = 0; i < allowedCards.length; i += batchSize) {
     console.log(
       `Processed ${
         Math.min(i + batchSize, allowedCards.length)
-      }/${allowedCards.length} cards (${failedCards.length} failed)`
+      }/${allowedCards.length} cards (${failedCards.length} failed)`,
     );
 
     // Add delay between batches to avoid overwhelming the API
@@ -153,8 +169,10 @@ for (let i = 0; i < allowedCards.length; i += batchSize) {
 
 // Retry failed cards if there are any
 if (failedCards.length > 0) {
-  console.log(`\nRetrying ${failedCards.length} failed cards with longer timeout...`);
-  
+  console.log(
+    `\nRetrying ${failedCards.length} failed cards with longer timeout...`,
+  );
+
   // Retry with more aggressive timeout and delay
   for (const card of failedCards) {
     try {
