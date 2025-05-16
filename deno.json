@@ -19,7 +19,7 @@
   },
   "exclude": [
     "**/_fresh/*",
-    "load-data/cache/**"
+    "**/load-data/cache"
   ],
   "imports": {
     "$fresh/": "https://deno.land/x/fresh@1.7.3/",
@@ -40,7 +40,8 @@
   "deploy": {
     "project": "3087519a-366e-47a7-8118-873a7788ca01",
     "exclude": [
-      "**/node_modules"
+      "**/node_modules",
+      "**/load-data/cache"
     ],
     "include": [],
     "entrypoint": "main.ts"
