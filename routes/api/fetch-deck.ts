@@ -97,6 +97,8 @@ export const handler = async (
   _ctx: FreshContext,
 ): Promise<Response> => {
   let timeoutId: number | undefined;
+  // Semi-verbose log: incoming request URL
+  console.log(`[fetch-deck] Incoming request URL=${req.url}`);
 
   // Skip during build and initialize utilities lazily
   const { isBuildMode } = await import("../../utils/is-build.ts");
@@ -122,11 +124,16 @@ export const handler = async (
     const url = new URL(req.url);
     const deckId = url.searchParams.get("id");
     if (!deckId) return createError("No deck ID provided");
+    // Semi-verbose log: client and deck information
+    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+    console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
 
     // Check rate limits
     const clientIp = req.headers.get("x-forwarded-for") ||
       req.headers.get("cf-connecting-ip") ||
       "unknown";
+    // Semi-verbose log: client and deck information
+    console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
 
     const rateLimit = validRateLimiter.check(clientIp);
     if (!rateLimit.allowed) {
@@ -140,6 +147,8 @@ export const handler = async (
     // Check cache first
     const cachedDeck = validDeckCache.get(deckId);
     if (cachedDeck) {
+      console.log(`[fetch-deck] Cache HIT for deckId=${deckId}`);
+      // Return cached deck
       return new Response(
         JSON.stringify(cachedDeck),
         {
@@ -152,6 +161,8 @@ export const handler = async (
       );
     }
 
+    // Cache MISS, proceeding to fetch
+    console.log(`[fetch-deck] Cache MISS for deckId=${deckId}`);
     // Fetch deck with retries
     let retries = 0;
     let moxfieldData: MoxfieldResponse | undefined;
@@ -253,6 +264,7 @@ export const handler = async (
 
     // Cache the validated deck
     validDeckCache.set(deckId, processedDeck);
+    console.log(`[fetch-deck] Cached deckId=${deckId} successfully`);
 
     return new Response(
       JSON.stringify(processedDeck as SuccessResponse),

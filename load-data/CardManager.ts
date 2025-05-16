@@ -96,9 +96,11 @@ export default class CardManager {
     this.allowedList = allowedListArray;
     this.singletonExceptions = singletonExceptionsArray;
 
+    // Semi-verbose log: CardManager initialized
+    console.log('[CardManager] initialized');
     // If running in a non-build mode, load cards from cache or download them
-    // This is to avoid loading cards during static generation
     if (!isBuildMode()) {
+      console.log('[CardManager] loading cards');
       void this.loadCards();
     }
   }
@@ -110,9 +112,10 @@ export default class CardManager {
   async loadCards(): Promise<void> {
     try {
       const filePath = new URL(`${CACHE_DIR}/cards.json`, import.meta.url);
+      console.log(`[CardManager] loading cards from cache ${filePath}`);
       const data = await Deno.readTextFile(filePath);
       this.cards = JSON.parse(data) as IScryfallCard[];
-      console.log(`Loaded ${this.cards.length} cards from cards.json`);
+      console.log(`[CardManager] loaded ${this.cards.length} cards from cache`);
     } catch (error) {
       // During build, we should never try to download cards
       if (isBuildMode()) {
@@ -142,7 +145,7 @@ export default class CardManager {
       const timeoutMs = 60000; // Increased timeout to 60 seconds
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      console.log("Fetching Scryfall bulk data information...");
+      console.log('[CardManager] fetching bulk data information');
 
       // Get bulk data URL
       const bulkDataInfo = await this.fetchBulkDataInfo(
@@ -155,7 +158,7 @@ export default class CardManager {
         throw new Error("No download URI found in Scryfall bulk data response");
       }
 
-      console.log("Starting streaming download of card data...");
+      console.log('[CardManager] starting streaming download');
       const bulkDataUrl = bulkDataInfo.download_uri;
 
       // Stream and process the data
@@ -165,18 +168,18 @@ export default class CardManager {
         retryCount,
       );
 
-      console.log(
-        `Successfully processed ${processedCards.length} cards from Scryfall`,
-      );
+      console.log(`[CardManager] successfully processed ${processedCards.length} cards`);
 
       // Calculate statistics
       const stats = this.calculateCardStats(processedCards);
       this.logCardStats(stats);
 
       // Cache the filtered data
+      console.log('[CardManager] caching processed cards');
       await this.cacheCardData(processedCards);
 
       // Reload the cards into memory
+      console.log('[CardManager] reloading cards after cache update');
       await this.loadCards();
       console.log("Successfully processed and saved card data");
     } catch (error) {

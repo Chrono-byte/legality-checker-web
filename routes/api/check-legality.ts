@@ -149,6 +149,8 @@ export const handler = async (
   req: Request,
   _ctx: FreshContext,
 ): Promise<Response> => {
+  // Semi-verbose log: incoming request for legality check
+  console.log(`[check-legality] ${req.method} ${req.url}`);
   // Skip during build
   if (isBuildMode()) {
     return new Response(
@@ -159,6 +161,7 @@ export const handler = async (
   try {
     // Validate request method
     if (req.method !== "POST") {
+      console.log(`[check-legality] Invalid method: ${req.method}`);
       return createError("Method not allowed", 405);
     }
 
@@ -176,6 +179,7 @@ export const handler = async (
 
     // Validate request data
     const { mainDeck, commander } = body;
+    console.log(`[check-legality] Parsed body: commander=${commander.name}, mainDeck items=${Array.isArray(mainDeck) ? mainDeck.length : 0}`);
 
     // Validate mainDeck
     if (!Array.isArray(mainDeck)) {
@@ -198,7 +202,8 @@ export const handler = async (
       );
     }
 
-    // Validate mainDeck entries
+    // Preliminary validations complete, proceeding to fetch commander data
+    console.log(`[check-legality] Fetching commander data for ${commander.name}`);
     for (const card of mainDeck) {
       if (typeof card.name !== "string" || !card.name) {
         return createError(
@@ -221,6 +226,7 @@ export const handler = async (
     const validCommanderData = commanderData as IScryfallCard;
 
     // Get deck legality information
+    console.log(`[check-legality] Testing decklist for commander=${commander.name}`);
     const { illegalCards } = cardManager.testDecklist({
       mainDeck,
       commander,
@@ -289,6 +295,7 @@ export const handler = async (
 
     // Determine overall legality
     const isLegal = Object.values(legalChecks).every((check) => check);
+    console.log(`[check-legality] Deck legality: legal=${isLegal}, illegalCards=${illegalCards.length}`);
 
     // Construct response
     const response: LegalityResponse = {
