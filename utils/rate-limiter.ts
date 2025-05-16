@@ -1,15 +1,32 @@
-// Rate limiting configuration - Sliding window
-const RATE_LIMIT = 30; // Max requests per window
-const RATE_WINDOW = 60 * 1000; // 1 minute window in ms
+/** Rate limiting configuration for sliding window algorithm */
 
+/** Maximum number of requests allowed per time window */
+const RATE_LIMIT = 30;
+/** Time window duration in milliseconds (1 minute) */
+const RATE_WINDOW = 60 * 1000;
+
+/**
+ * Represents a rate limit entry using the sliding window algorithm
+ * Tracks request counts in both current and previous time windows
+ */
 interface SlidingWindowRateLimitEntry {
+  /** Timestamp when the current time window started */
   currentWindowStart: number;
+  /** Number of requests in the previous time window */
   prevWindowCount: number;
+  /** Number of requests in the current time window */
   currentWindowCount: number;
 }
 
+/**
+ * Rate limiter implementation using a sliding window algorithm
+ * Tracks request rates per client IP and enforces rate limits
+ * with automatic cleanup of expired entries
+ */
 export class RateLimiter {
+  /** Storage for rate limit data per client IP */
   private rateLimitStore = new Map<string, SlidingWindowRateLimitEntry>();
+  /** Timer ID for the periodic cleanup of expired entries */
   private cleanupInterval: number;
 
   constructor() {

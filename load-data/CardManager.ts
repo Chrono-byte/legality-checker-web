@@ -1,28 +1,52 @@
 import type { IScryfallCard } from "npm:scryfall-types";
+import { isBuildMode } from "../utils/is-build.ts";
 
-// Define data and cache directories
-const DATA_DIR = "./data";
+/** Directory path for static data files */
+const _DATA_DIR = "./data";
+/** Directory path for cached data */
 const CACHE_DIR = "./cache";
 
+/**
+ * Represents a card in a deck with its quantity and name
+ */
 interface DeckCard {
+  /** The number of copies of the card */
   quantity: number;
+  /** The name of the card */
   name: string;
 }
 
+/**
+ * Represents a complete deck list with main deck and commander
+ */
 interface DeckList {
+  /** Array of cards in the main deck */
   mainDeck: DeckCard[];
+  /** The commander card */
   commander: DeckCard;
 }
 
+/**
+ * Results from validating a deck list against format rules
+ */
 interface CardValidationResult {
+  /** Array of cards that are legal in the format */
   legalCards: IScryfallCard[];
+  /** Array of card names that are not legal in the format */
   illegalCards: string[];
 }
 
-// Utility function to read and parse a CSV file into an array of trimmed card names
+/**
+ * Utility function to read and parse a CSV file into an array of trimmed card names
+/**
+ * Reads a CSV file and returns its contents as an array of trimmed strings
+ * @param filename The name of the CSV file to read
+ * @returns Promise resolving to an array of card names
+ * @throws Error if file cannot be read or parsed
+ */
 async function loadCardList(filename: string): Promise<string[]> {
   const text = await Deno.readTextFile(
-    new URL(`${DATA_DIR}/${filename}`, import.meta.url),
+    new URL(`${_DATA_DIR}/${filename}`, import.meta.url),
   );
   return text
     .split("\n")
@@ -30,22 +54,42 @@ async function loadCardList(filename: string): Promise<string[]> {
     .filter(Boolean);
 }
 
+/** Banner list initialized with CSV data */
+let bannedListArray: string[] = [];
+/** Allowed list initialized with CSV data */
+let allowedListArray: string[] = [];
+/** Singleton exceptions initialized with CSV data */
+let singletonExceptionsArray: string[] = [];
+
 // Load lists concurrently
-const [bannedListArray, allowedListArray, singletonExceptionsArray] =
-  await Promise.all([
-    loadCardList("banned_list.csv"),
-    loadCardList("allowed_list.csv"),
-    loadCardList("singleton_exceptions.csv"),
-  ]);
+try {
+  [bannedListArray, allowedListArray, singletonExceptionsArray] = await Promise
+    .all([
+      loadCardList("banned_list.csv"),
+      loadCardList("allowed_list.csv"),
+      loadCardList("singleton_exceptions.csv"),
+    ]);
+} catch (error) {
+  console.error("Failed to load card lists:", error);
+  // Initialize with empty arrays to prevent runtime errors
+  bannedListArray = [];
+  allowedListArray = [];
+  singletonExceptionsArray = [];
+}
 
 /**
  * Manages card data, legality checks, and deck validation for the format
  */
 export default class CardManager {
+  /** Array of all cards from Scryfall */
   private cards: IScryfallCard[];
+  /** List of cards banned in the format */
   private readonly bannedList: string[];
+  /** List of additional cards allowed in the format */
   private readonly allowedList: string[];
+  /** List of cards allowed to have multiple copies */
   private readonly singletonExceptions: string[];
+  /** Cache of card legality results */
   private readonly cardLegality: Map<string, boolean>;
 
   constructor() {
@@ -55,7 +99,9 @@ export default class CardManager {
     this.singletonExceptions = singletonExceptionsArray;
     this.cardLegality = new Map();
 
-    void this.loadCards();
+    if (!isBuildMode()) {
+      void this.loadCards();
+    }
   }
 
   /**
@@ -97,7 +143,9 @@ export default class CardManager {
       const bulkData = await this.fetchBulkData(controller.signal, retryCount);
       clearTimeout(timeoutId);
 
-      console.log(`Successfully downloaded ${bulkData.length} cards from Scryfall`);
+      console.log(
+        `Successfully downloaded ${bulkData.length} cards from Scryfall`,
+      );
 
       // Filter cards to include only physical cards
       const pdhCards = bulkData.filter((card) => card.games.includes("paper"));
@@ -115,10 +163,14 @@ export default class CardManager {
     } catch (error) {
       console.error("Error fetching bulk card data:", error);
       if (retryCount > 0) {
-        console.log(`Retrying download... (${retryCount - 1} attempts remaining)`);
+        console.log(
+          `Retrying download... (${retryCount - 1} attempts remaining)`,
+        );
         await this.downloadCards(retryCount - 1);
       } else {
-        throw new Error("Failed to download card data after all retry attempts");
+        throw new Error(
+          "Failed to download card data after all retry attempts",
+        );
       }
     }
   }
@@ -205,8 +257,10 @@ export default class CardManager {
       totalCards: cards.length,
       pioneerLegal: cards.filter((card) => card.legalities.pioneer === "legal")
         .length,
-      banned: cards.filter((card) => this.bannedList.includes(card.name)).length,
-      allowed: cards.filter((card) => this.allowedList.includes(card.name)).length,
+      banned:
+        cards.filter((card) => this.bannedList.includes(card.name)).length,
+      allowed:
+        cards.filter((card) => this.allowedList.includes(card.name)).length,
     };
   }
 
@@ -233,7 +287,7 @@ export default class CardManager {
   private async cacheCardData(cards: IScryfallCard[]): Promise<void> {
     const cacheUrl = new URL(`${CACHE_DIR}`, import.meta.url);
     const filePath = new URL(`${CACHE_DIR}/cards.json`, import.meta.url);
-    
+
     try {
       // Create cache directory if it doesn't exist
       await Deno.mkdir(cacheUrl, { recursive: true });
@@ -256,7 +310,7 @@ export default class CardManager {
   parseDeckList(deckList: string): DeckList {
     const lines = deckList.split("\n");
     const commanderIndex = lines.findIndex((line) => line.trim() === "");
-    
+
     if (commanderIndex === -1) {
       throw new Error("Invalid deck list format: No separator line found");
     }
@@ -270,7 +324,7 @@ export default class CardManager {
 
     const [quantityStr, ...cardName] = commanderLine.split(" ");
     const quantity = parseInt(quantityStr, 10);
-    
+
     if (isNaN(quantity) || quantity < 1) {
       throw new Error(`Invalid commander quantity: ${quantityStr}`);
     }
@@ -283,7 +337,7 @@ export default class CardManager {
     const mainDeck = mainDeckLines.map((line): DeckCard => {
       const [quantityStr, ...cardName] = line.split(" ");
       const quantity = parseInt(quantityStr, 10);
-      
+
       if (isNaN(quantity) || quantity < 1) {
         throw new Error(`Invalid quantity in line: ${line}`);
       }
@@ -469,11 +523,20 @@ export default class CardManager {
     return { legalCards, illegalCards };
   }
 
+  /**
+   * Gets a card's data and legality information by name
+   * @param cardName Name of the card to fetch
+   * @returns Card data with legality information if found, null otherwise
+   */
   fetchCard(cardName: string): IScryfallCard | null {
     return this.getCardWithLegality(cardName);
   }
 
-  // Check if a card is allowed to break the singleton rule
+  /**
+   * Checks if a card is allowed to have multiple copies in the deck
+   * @param cardName Name of the card to check
+   * @returns Whether the card is exempt from the singleton rule
+   */
   isAllowedToBreakSingletonRule(cardName: string): boolean {
     return this.singletonExceptions.includes(cardName);
   }

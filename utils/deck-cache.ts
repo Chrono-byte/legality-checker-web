@@ -3,12 +3,22 @@ import type { ProcessedDeck } from "../types/moxfield.ts";
 const CACHE_TTL = 60 * 60 * 1000; // 60 minutes cache TTL
 const MAX_CACHE_SIZE = 1000; // Maximum number of entries
 
+/**
+ * Represents an entry in the deck cache with timestamp for TTL checks
+ */
 interface CacheEntry {
+  /** Time when the entry was added */
   timestamp: number;
+  /** The processed deck data */
   data: ProcessedDeck;
 }
 
+/**
+ * Caches processed decks to avoid repeated API calls
+ * Uses a Map for storage with TTL-based expiration
+ */
 export class DeckCache {
+  /** Internal storage for cached deck data */
   private cache = new Map<string, CacheEntry>();
 
   constructor() {

@@ -1,43 +1,72 @@
 import { FreshContext } from "$fresh/server.ts";
 import { IScryfallCard } from "npm:scryfall-types";
 import CardManager from "../../load-data/CardManager.ts";
+import { isBuildMode } from "../../utils/is-build.ts";
 
-// Types
+/** Represents a single card in a deck with its quantity */
 interface Card {
+  /** Number of copies of the card */
   quantity: number;
+  /** Name of the card */
   name: string;
 }
 
+/** Request payload for deck legality check */
 interface DeckLegalityRequest {
+  /** Array of cards in the main deck */
   mainDeck: Card[];
+  /** The commander card */
   commander: Card;
 }
 
+/** Individual format rule check results */
 interface LegalityChecks {
+  /** Whether the deck size is legal */
   size: boolean;
+  /** Whether the commander is legal */
   commander: boolean;
+  /** Whether all cards match the commander's color identity */
   colorIdentity: boolean;
+  /** Whether the deck follows singleton rules */
   singleton: boolean;
+  /** Whether all cards are legal in the format */
   illegalCards: boolean;
 }
 
+/** Response payload for deck legality check */
 interface LegalityResponse {
+  /** Overall legality of the deck */
   legal: boolean;
+  /** Name of the commander */
   commander: string;
+  /** Color identity of the deck */
   colorIdentity: string[];
+  /** Total number of cards in the deck */
   deckSize: number;
+  /** Required deck size for the format */
   requiredSize: number;
+  /** Array of card names that are not legal in the format */
   illegalCards: string[];
+  /** Array of card names that violate color identity rules */
   colorIdentityViolations: string[];
+  /** Array of card names that violate singleton rules */
   nonSingletonCards: string[];
+  /** Detailed explanation of legality issues */
   legalIssues: {
+    /** Issue with deck size */
     size: string | null;
+    /** Issue with commander legality */
     commander: string | null;
+    /** Issue with commander type (legendary/creature) */
     commanderType: string | null;
+    /** Issue with color identity */
     colorIdentity: string | null;
+    /** Issue with singleton rule */
     singleton: string | null;
+    /** Issue with illegal cards */
     illegalCards: string | null;
   };
+  /** Error message if request processing failed */
   error?: string;
 }
 
@@ -112,7 +141,6 @@ export const handler = async (
   _ctx: FreshContext,
 ): Promise<Response> => {
   // Skip during build
-  const { isBuildMode } = await import("../../utils/is-build.ts");
   if (isBuildMode()) {
     return new Response(
       JSON.stringify({ error: "Service unavailable during build" }),
@@ -132,22 +160,22 @@ export const handler = async (
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       const clonedReq = req.clone();
       const rawBody = await clonedReq.json();
-      console.log('Received request body:', {
+      console.log("Received request body:", {
         mainDeckLength: rawBody.mainDeck?.length,
         hasCommander: !!rawBody.commander,
         mainDeckFirst: rawBody.mainDeck?.[0],
-        commander: rawBody.commander
+        commander: rawBody.commander,
       });
       body = rawBody;
       clearTimeout(timeoutId);
     } catch (parseError) {
-      console.error('Parse error:', parseError);
+      console.error("Parse error:", parseError);
       return createError(`Failed to parse request body: ${String(parseError)}`);
     }
 
     // Validate request data
     const { mainDeck, commander } = body;
-    
+
     // Validate mainDeck
     if (!Array.isArray(mainDeck)) {
       return createError("Invalid deck data: mainDeck must be an array");
@@ -155,25 +183,31 @@ export const handler = async (
     if (!mainDeck.length) {
       return createError("Invalid deck data: mainDeck cannot be empty");
     }
-    
+
     // Validate commander
     if (!commander) {
       return createError("Invalid deck data: commander is required");
     }
-    if (typeof commander.name !== 'string' || !commander.name) {
+    if (typeof commander.name !== "string" || !commander.name) {
       return createError("Invalid deck data: commander must have a valid name");
     }
-    if (typeof commander.quantity !== 'number' || commander.quantity < 1) {
-      return createError("Invalid deck data: commander must have a valid quantity");
+    if (typeof commander.quantity !== "number" || commander.quantity < 1) {
+      return createError(
+        "Invalid deck data: commander must have a valid quantity",
+      );
     }
-    
+
     // Validate mainDeck entries
     for (const card of mainDeck) {
-      if (typeof card.name !== 'string' || !card.name) {
-        return createError(`Invalid deck data: card in mainDeck must have a valid name`);
+      if (typeof card.name !== "string" || !card.name) {
+        return createError(
+          `Invalid deck data: card in mainDeck must have a valid name`,
+        );
       }
-      if (typeof card.quantity !== 'number' || card.quantity < 1) {
-        return createError(`Invalid deck data: card '${card.name}' must have a valid quantity`);
+      if (typeof card.quantity !== "number" || card.quantity < 1) {
+        return createError(
+          `Invalid deck data: card '${card.name}' must have a valid quantity`,
+        );
       }
     }
 
@@ -194,7 +228,7 @@ export const handler = async (
     // Calculate total cards
     const cardQuantities = mainDeck.reduce(
       (total: number, card: Card) => total + card.quantity,
-      0
+      0,
     );
     const totalCards = cardQuantities + commander.quantity;
 
