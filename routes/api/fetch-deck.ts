@@ -100,9 +100,9 @@ export const handler = async (
   // Semi-verbose log: incoming request URL
   console.log(`[fetch-deck] Incoming request URL=${req.url}`);
 
-  // Skip during build and initialize utilities lazily
+  // Skip during build and initialize utilities lazily, but allow tests to run
   const { isBuildMode } = await import("../../utils/is-build.ts");
-  if (isBuildMode()) {
+  if (isBuildMode() && !Deno.env.get("DENO_TEST")) {
     return new Response(
       JSON.stringify({ error: "Service unavailable during build" }),
       { status: 503, headers: JSON_HEADERS },

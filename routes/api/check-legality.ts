@@ -1,6 +1,6 @@
 import { FreshContext } from "$fresh/server.ts";
 import { IScryfallCard } from "npm:scryfall-types";
-import CardManager from "../../load-data/CardManager.ts";
+import CardManager from "../../CardManager/CardManager.ts";
 import { isBuildMode } from "../../utils/is-build.ts";
 
 /** Represents a single card in a deck with its quantity */
@@ -151,8 +151,8 @@ export const handler = async (
 ): Promise<Response> => {
   // Semi-verbose log: incoming request for legality check
   console.log(`[check-legality] ${req.method} ${req.url}`);
-  // Skip during build
-  if (isBuildMode()) {
+  // Skip during build but allow tests to run
+  if (isBuildMode() && !Deno.env.get("DENO_TEST")) {
     return new Response(
       JSON.stringify({ error: "Service unavailable during build" }),
       { status: 503, headers: JSON_HEADERS },
