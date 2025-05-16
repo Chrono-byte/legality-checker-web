@@ -231,7 +231,19 @@ export default class CardManager {
    * Caches card data to disk
    */
   private async cacheCardData(cards: IScryfallCard[]): Promise<void> {
+    const cacheUrl = new URL(`${CACHE_DIR}`, import.meta.url);
     const filePath = new URL(`${CACHE_DIR}/cards.json`, import.meta.url);
+    
+    try {
+      // Create cache directory if it doesn't exist
+      await Deno.mkdir(cacheUrl, { recursive: true });
+    } catch (error) {
+      // Ignore error if directory already exists
+      if (!(error instanceof Deno.errors.AlreadyExists)) {
+        throw error;
+      }
+    }
+
     const jsonString = JSON.stringify(cards);
     await Deno.writeTextFile(filePath, jsonString);
   }
