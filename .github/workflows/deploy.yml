@@ -32,3 +32,5 @@ jobs:
           project: "clever-seahorse-52"
           entrypoint: "main.ts"
           root: "."
+          
+          
