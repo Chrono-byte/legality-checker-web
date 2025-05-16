@@ -16,6 +16,14 @@ interface Decklist {
 interface LegalityResult {
   legal: boolean;
   commander: string;
+  commanderImageUris?: {
+    small?: string;
+    normal?: string;
+    large?: string;
+    png?: string;
+    art_crop?: string;
+    border_crop?: string;
+  };
   colorIdentity?: string[];
   illegalCards?: string[];
   colorIdentityViolations?: string[];
@@ -354,25 +362,44 @@ export default function DeckLegalityChecker() {
               <h3 class="text-xl font-semibold text-gray-800 mb-4">
                 Deck Information
               </h3>
-              <div class="space-y-2">
-                <p>
-                  <span class="font-medium text-gray-700">Commander:</span>{" "}
-                  <span class="text-gray-900">{commander}</span>
-                </p>
-                <p>
-                  <span class="font-medium text-gray-700">Color Identity:</span>
-                  {" "}
-                  <span class="text-gray-900">{colorIdentity.join(", ")}</span>
-                </p>
-                {result?.deckSize != null && (
+              <div class="flex flex-col md:flex-row gap-6">
+                {result?.commanderImageUris?.normal && (
+                  <div class="flex-shrink-0">
+                    <img
+                      src={result.commanderImageUris.normal}
+                      alt={commander}
+                      class="rounded-lg shadow-lg w-full md:w-64"
+                      width={265}
+                      height={370}
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                <div class="space-y-2">
                   <p>
-                    <span class="font-medium text-gray-700">Deck Size:</span>
+                    <span class="font-medium text-gray-700">Commander:</span>
                     {" "}
+                    <span class="text-gray-900">{commander}</span>
+                  </p>
+                  <p>
+                    <span class="font-medium text-gray-700">
+                      Color Identity:
+                    </span>{" "}
                     <span class="text-gray-900">
-                      {result.deckSize} cards (Required: {result.requiredSize})
+                      {colorIdentity.join(", ")}
                     </span>
                   </p>
-                )}
+                  {result?.deckSize != null && (
+                    <p>
+                      <span class="font-medium text-gray-700">Deck Size:</span>
+                      {" "}
+                      <span class="text-gray-900">
+                        {result.deckSize} cards (Required:{" "}
+                        {result.requiredSize})
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

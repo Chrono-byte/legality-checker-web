@@ -1,6 +1,6 @@
 import type { ProcessedDeck } from "../types/moxfield.ts";
 
-const CACHE_TTL = 60 * 60 * 1000; // 60 minutes cache TTL
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache TTL
 const MAX_CACHE_SIZE = 1000; // Maximum number of entries
 
 /**

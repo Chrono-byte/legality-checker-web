@@ -39,6 +39,15 @@ interface LegalityResponse {
   legal: boolean;
   /** Name of the commander */
   commander: string;
+  /** The commander's Scryfall image URIs */
+  commanderImageUris?: {
+    small?: string;
+    normal?: string;
+    large?: string;
+    png?: string;
+    art_crop?: string;
+    border_crop?: string;
+  };
   /** Color identity of the deck */
   colorIdentity: string[];
   /** Total number of cards in the deck */
@@ -159,17 +168,9 @@ export const handler = async (
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       const clonedReq = req.clone();
-      const rawBody = await clonedReq.json();
-      console.log("Received request body:", {
-        mainDeckLength: rawBody.mainDeck?.length,
-        hasCommander: !!rawBody.commander,
-        mainDeckFirst: rawBody.mainDeck?.[0],
-        commander: rawBody.commander,
-      });
-      body = rawBody;
+      body = await clonedReq.json();
       clearTimeout(timeoutId);
     } catch (parseError) {
-      console.error("Parse error:", parseError);
       return createError(`Failed to parse request body: ${String(parseError)}`);
     }
 
@@ -278,6 +279,7 @@ export const handler = async (
 
       if (
         cardData &&
+        Array.isArray(cardData.color_identity) &&
         !cardData.color_identity.every((color) => colorIdentity.has(color))
       ) {
         legalChecks.colorIdentity = false;
@@ -292,6 +294,7 @@ export const handler = async (
     const response: LegalityResponse = {
       legal: isLegal,
       commander: commander.name,
+      commanderImageUris: validCommanderData.image_uris ?? undefined,
       colorIdentity: Array.from(colorIdentity),
       deckSize: totalCards,
       requiredSize: 100,

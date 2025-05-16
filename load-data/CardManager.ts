@@ -116,18 +116,17 @@ export default class CardManager {
     } catch (error) {
       // During build, we should never try to download cards
       if (isBuildMode()) {
-        throw new Error("Card data is required for build but cards.json was not found. Please run the development server first to download card data.");
+        throw new Error(
+          "Card data is required for build but cards.json was not found. Please run the development server first to download card data.",
+        );
       }
 
-      if (error instanceof Deno.errors.NotFound) {
-        console.log("cards.json not found, downloading cards...");
-        await this.downloadCards();
-      } else if (error instanceof SyntaxError) {
-        console.error("Error parsing cards.json, redownloading...");
+      if (error instanceof Deno.errors.NotFound || error instanceof SyntaxError) {
+        console.log("Card cache missing or invalid, downloading fresh data...");
         await this.downloadCards();
       } else {
-        console.error("Error loading cards:", error);
-        throw error; // Re-throw unexpected errors
+        console.error("Unexpected error loading cards:", error);
+        throw error;
       }
     }
   }
@@ -144,49 +143,38 @@ export default class CardManager {
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       console.log("Fetching Scryfall bulk data information...");
-      const bulkData = await this.fetchBulkData(controller.signal, retryCount);
+
+      // Get bulk data URL
+      const bulkDataInfo = await this.fetchBulkDataInfo(
+        controller.signal,
+        retryCount,
+      );
       clearTimeout(timeoutId);
 
-      console.log(
-        `Successfully downloaded ${bulkData.length} cards from Scryfall`,
+      if (!bulkDataInfo.download_uri) {
+        throw new Error("No download URI found in Scryfall bulk data response");
+      }
+
+      console.log("Starting streaming download of card data...");
+      const bulkDataUrl = bulkDataInfo.download_uri;
+
+      // Stream and process the data
+      const processedCards = await this.streamAndProcessCards(
+        bulkDataUrl,
+        controller.signal,
+        retryCount,
       );
 
-      // Filter cards to include only physical cards
-      // Only include cards that are possible to include during deck construction
-      const pdhCards = bulkData.filter((card) => {
-        // Exclude non-paper, tokens, memorabilia, emblems, and special types
-        if (!card.games.includes("paper")) return false;
-        const layout = card.layout?.toLowerCase() ?? "";
-        const typeLine = card.type_line?.toLowerCase() ?? "";
-        const setType = card.set_type?.toLowerCase() ?? "";
-        const name = card.name.toLowerCase();
-
-        if (layout.includes("token")) return false;
-        if (typeLine.includes("token")) return false;
-        if (setType.includes("memorabilia") || setType.includes("token")) {
-          return false;
-        }
-        if (name.includes("emblem")) return false;
-
-        // Exclude special card types
-        const excludedTypes = [
-          "vanguard",
-          "plane",
-          "scheme",
-          "conspiracy",
-          "phenomenon",
-        ];
-        if (excludedTypes.some((type) => typeLine.includes(type))) return false;
-
-        return true;
-      });
+      console.log(
+        `Successfully processed ${processedCards.length} cards from Scryfall`,
+      );
 
       // Calculate statistics
-      const stats = this.calculateCardStats(pdhCards);
+      const stats = this.calculateCardStats(processedCards);
       this.logCardStats(stats);
 
       // Cache the filtered data
-      await this.cacheCardData(pdhCards);
+      await this.cacheCardData(processedCards);
 
       // Reload the cards into memory
       await this.loadCards();
@@ -216,14 +204,14 @@ export default class CardManager {
   }
 
   /**
-   * Fetches bulk data from Scryfall API with improved error handling
+   * Fetches bulk data information from Scryfall API
    * @param signal AbortSignal for request cancellation
    * @param retryCount Number of retries for failed requests
    */
-  private async fetchBulkData(
+  private async fetchBulkDataInfo(
     signal: AbortSignal,
     retryCount: number,
-  ): Promise<IScryfallCard[]> {
+  ): Promise<{ download_uri: string }> {
     const response = await this.fetchWithRetry(
       "https://api.scryfall.com/bulk-data/oracle-cards",
       {
@@ -242,15 +230,23 @@ export default class CardManager {
       );
     }
 
-    const data = await response.json();
-    if (!data.download_uri) {
-      throw new Error("No download URI found in Scryfall bulk data response");
-    }
+    return await response.json() as { download_uri: string };
+  }
 
-    const bulkDataUrl = data.download_uri;
-    console.log("Fetching bulk card data from:", bulkDataUrl);
+  /**
+   * Streams and processes card data with memory-efficient approach
+   * @param bulkDataUrl URL to fetch card data from
+   * @param signal AbortSignal for request cancellation
+   * @param retryCount Number of retries for failed requests
+   */
+  private async streamAndProcessCards(
+    bulkDataUrl: string,
+    signal: AbortSignal,
+    retryCount: number,
+  ): Promise<IScryfallCard[]> {
+    console.log("Fetching bulk card data from: ", bulkDataUrl);
 
-    const bulkDataResponse = await this.fetchWithRetry(
+    const response = await this.fetchWithRetry(
       bulkDataUrl,
       {
         signal,
@@ -262,14 +258,176 @@ export default class CardManager {
       retryCount,
     );
 
-    if (!bulkDataResponse.ok) {
+    if (!response.ok) {
       throw new Error(
-        `HTTP error! status: ${bulkDataResponse.status} - ${await bulkDataResponse
-          .text()}`,
+        `HTTP error! status: ${response.status} - ${await response.text()}`,
       );
     }
 
-    return await bulkDataResponse.json() as IScryfallCard[];
+    // For memory efficiency, we'll only keep the fields we actually need
+    const processedCards: IScryfallCard[] = [];
+    const necessaryFields = [
+      "name",
+      "image_uris",
+      "oracle_id",
+      "legalities",
+      "games",
+      "layout",
+      "type_line",
+      "set_type",
+      "card_faces",
+      "color_identity",
+    ];
+
+    // Use streaming JSON parser if available
+    if (typeof response.body?.getReader === "function") {
+      // Read the response as a stream of UTF-8 text
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let depth = 0;
+      let currentObject = "";
+      let inQuotes = false;
+      let escapeNext = false;
+
+      console.log("Processing card data as stream...");
+      let processedCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        while (buffer.length > 0) {
+          const char = buffer[0];
+          buffer = buffer.slice(1);
+
+          if (escapeNext) {
+            currentObject += char;
+            escapeNext = false;
+            continue;
+          }
+
+          if (char === '"' && !inQuotes) {
+            inQuotes = true;
+            currentObject += char;
+          } else if (char === '"' && inQuotes) {
+            inQuotes = false;
+            currentObject += char;
+          } else if (char === "\\" && inQuotes) {
+            escapeNext = true;
+            currentObject += char;
+          } else if (char === "{" && !inQuotes) {
+            depth++;
+            currentObject += char;
+          } else if (char === "}" && !inQuotes) {
+            currentObject += char;
+            depth--;
+
+            if (depth === 0) {
+              try {
+                const card = JSON.parse(currentObject) as IScryfallCard;
+
+                // Apply filtering criteria during streaming
+                if (this.isCardEligible(card)) {
+                  // Only keep necessary fields to reduce memory usage
+                  const trimmedCard = this.trimCardData(card, necessaryFields);
+
+                  processedCards.push(trimmedCard);
+                }
+
+                processedCount++;
+                if (processedCount % 10000 === 0) {
+                  console.log(`Processed ${processedCount} cards...`);
+                }
+
+                currentObject = "";
+              } catch (e) {
+                console.error("Failed to parse card object:", e);
+                currentObject = "";
+              }
+            }
+          } else if (char === "[" && !inQuotes && depth === 0) {
+            // Start of array, ignore
+          } else if (char === "]" && !inQuotes && depth === 0) {
+            // End of array, ignore
+          } else if (char === "," && !inQuotes && depth === 0) {
+            // Comma between objects at root level, ignore
+          } else {
+            currentObject += char;
+          }
+
+          // If buffer gets too big, pause and return current results
+          if (buffer.length > 10000000) { // 10MB
+            console.log("Buffer getting large, processing in chunks...");
+            break;
+          }
+        }
+      }
+
+      decoder.decode(); // Flush the decoder
+      console.log(
+        `Processed ${processedCount} cards, kept ${processedCards.length} eligible`,
+      );
+    } else {
+      throw new Error(
+        "Streaming JSON parser not available, unable to process card data",
+      );
+    }
+
+    return processedCards;
+  }
+
+  /**
+   * Checks if a card is eligible to be included in the data set
+   * @param card Card to check
+   * @returns Whether the card should be included
+   */
+  private isCardEligible(card: IScryfallCard): boolean {
+    // Exclude non-paper, tokens, memorabilia, emblems, and special types
+    if (!card.games?.includes("paper")) return false;
+    const layout = card.layout?.toLowerCase() ?? "";
+    const typeLine = card.type_line?.toLowerCase() ?? "";
+    const setType = card.set_type?.toLowerCase() ?? "";
+    const name = card.name.toLowerCase();
+
+    if (layout.includes("token")) return false;
+    if (typeLine.includes("token")) return false;
+    if (setType.includes("memorabilia") || setType.includes("token")) {
+      return false;
+    }
+    if (name.includes("emblem")) return false;
+
+    // Exclude special card types
+    const excludedTypes = [
+      "vanguard",
+      "scheme",
+      "conspiracy",
+      "phenomenon",
+    ];
+    if (excludedTypes.some((type) => typeLine.includes(type))) return false;
+
+    return true;
+  }
+
+  /**
+   * Creates a trimmed down version of card data with only needed fields
+   * @param card The full card data
+   * @param fields Array of field names to keep
+   * @returns Trimmed card object
+   */
+  private trimCardData(card: IScryfallCard, fields: string[]): IScryfallCard {
+    // Only keep the specified fields from the card object
+    const trimmedCard: { [key: string]: unknown } = {};
+    for (const field of fields) {
+      if (field in card) {
+        trimmedCard[field] =
+          (card as IScryfallCard)[field as keyof IScryfallCard];
+      }
+    }
+    // return the trimmed card object
+    return trimmedCard as unknown as IScryfallCard;
   }
 
   /**
@@ -527,31 +685,11 @@ export default class CardManager {
     }
 
     if (!cardData) {
-      const card = this.cards.find((c) => c.name === cardName);
-      if (card && this.isToken(card)) {
-        console.log(
-          `Card "${cardName}" marked illegal: This is a token, not a real card`,
-        );
-      } else {
-        console.log(
-          `Card "${cardName}" marked illegal: Card not found in database`,
-        );
-      }
       illegalCards.push(cardName);
       return;
     }
 
     if (cardData.legalities.pioneer !== "legal") {
-      console.log(cardData);
-
-      console.log(
-        `Card "${cardName}" marked illegal: Not legal in Pioneer format`,
-      );
-      if (this.bannedList.includes(cardName)) {
-        console.log(`-> Reason: Card is on the banned list`);
-      } else if (!this.allowedList.includes(cardName)) {
-        console.log(`-> Reason: Card is not on the allowed list`);
-      }
       illegalCards.push(cardName);
       return;
     }

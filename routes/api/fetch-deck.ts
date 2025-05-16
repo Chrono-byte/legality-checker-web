@@ -164,7 +164,7 @@ export const handler = async (
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        if (retries > 0 && !Deno.env.get("DENO_DEPLOYMENT_ID")) {
+        if (retries > 0) {
           console.log(
             `Retrying fetch for deck with ID: ${deckId} (attempt ${retries}/${REQUEST_CONFIG.maxRetries})`,
           );
