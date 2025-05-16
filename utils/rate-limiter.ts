@@ -24,7 +24,13 @@ export class RateLimiter {
     }
   }
 
-  check(clientIp: string): { allowed: boolean; headers: Record<string, string>; timeUntilReset?: number } {
+  check(
+    clientIp: string,
+  ): {
+    allowed: boolean;
+    headers: Record<string, string>;
+    timeUntilReset?: number;
+  } {
     const now = Date.now();
     const entry = this.rateLimitStore.get(clientIp);
 
@@ -34,7 +40,10 @@ export class RateLimiter {
         prevWindowCount: 0,
         currentWindowCount: 1,
       });
-      return { allowed: true, headers: this.getRateLimitHeaders(RATE_LIMIT - 1, now) };
+      return {
+        allowed: true,
+        headers: this.getRateLimitHeaders(RATE_LIMIT - 1, now),
+      };
     }
 
     const elapsed = now - entry.currentWindowStart;
@@ -57,7 +66,7 @@ export class RateLimiter {
         allowed: true,
         headers: this.getRateLimitHeaders(
           RATE_LIMIT - Math.ceil(slidingWindowCount) - 1,
-          now
+          now,
         ),
       };
     }
@@ -69,7 +78,10 @@ export class RateLimiter {
       currentWindowCount: 1,
     });
 
-    return { allowed: true, headers: this.getRateLimitHeaders(RATE_LIMIT - 1, now) };
+    return {
+      allowed: true,
+      headers: this.getRateLimitHeaders(RATE_LIMIT - 1, now),
+    };
   }
 
   private cleanup() {
@@ -90,13 +102,13 @@ export class RateLimiter {
   private getRateLimitHeaders(
     remaining: number,
     now: number,
-    retryAfter?: number
+    retryAfter?: number,
   ): Record<string, string> {
     const headers: Record<string, string> = {
       "X-RateLimit-Limit": RATE_LIMIT.toString(),
       "X-RateLimit-Remaining": remaining.toString(),
       "X-RateLimit-Reset": Math.floor(
-        (now + RATE_WINDOW) / 1000
+        (now + RATE_WINDOW) / 1000,
       ).toString(),
     };
 

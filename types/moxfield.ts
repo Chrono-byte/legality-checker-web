@@ -12,13 +12,13 @@ export interface MoxfieldResponse {
 }
 
 export interface ProcessedDeck {
-  cards: Array<{ quantity: number; name: string }>;
+  mainDeck: Array<{ quantity: number; name: string }>;
   commander: { quantity: number; name: string } | null;
 }
 
 // API response types
 export interface SuccessResponse {
-  cards: Array<{ quantity: number; name: string }>;
+  mainDeck: Array<{ quantity: number; name: string }>;
   commander: { quantity: number; name: string };
 }
 

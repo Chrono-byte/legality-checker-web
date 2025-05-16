@@ -1,41 +1,49 @@
-import { asset } from "$fresh/runtime.ts";
+// import { asset } from "$fresh/runtime.ts";
 
 export default function NavBar() {
   return (
-    <nav class="bg-green-700 shadow-md">
+    <nav class="bg-green-800 shadow-lg">
       <div class="max-w-screen-lg mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <a href="/" class="flex items-center">
-                <img
-                  class="h-8 w-auto mr-2"
-                  src={asset("logo.svg")}
-                  alt="Pioneer Highlander Logo"
-                />
-                <span class="text-white font-bold text-xl">
-                  Pioneer Highlander
-                </span>
-              </a>
-            </div>
+          {/* Logo and brand section */}
+          <div class="flex-1 flex items-center justify-start">
+            <a
+              href="/"
+              class="flex items-center space-x-3 group transition-all duration-200"
+            >
+              <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-yellow-300 via-orange-400 to-cyan-500 bg-clip-text text-transparent select-none">
+                PHL
+              </span>
+              <span class="text-white font-bold text-xl tracking-tight">
+                Pioneer Highlander
+              </span>
+            </a>
           </div>
-          <div class="flex">
-            <div class="ml-4 flex items-center space-x-4">
+
+          {/* Navigation links */}
+          <div class="flex-shrink-0">
+            <div class="flex items-center space-x-1">
               <a
                 href="/"
-                class="text-green-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+                class="text-green-50 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
               >
                 Home
               </a>
               <a
                 href="/deck-checker"
-                class="text-green-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+                class="text-green-50 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
               >
                 Deck Checker
               </a>
               <a
+                href="/rules"
+                class="text-green-50 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+              >
+                Rules
+              </a>
+              <a
                 href="/banlist"
-                class="text-green-100 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+                class="text-green-50 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
               >
                 Banlist
               </a>

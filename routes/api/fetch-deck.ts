@@ -2,10 +2,10 @@ import { FreshContext } from "$fresh/server.ts";
 import { DeckCache } from "../../utils/deck-cache.ts";
 import { RateLimiter } from "../../utils/rate-limiter.ts";
 import type {
+  ErrorResponse,
   MoxfieldResponse,
   ProcessedDeck,
   SuccessResponse,
-  ErrorResponse,
 } from "../../types/moxfield.ts";
 
 // Constants
@@ -25,7 +25,11 @@ let deckCache: DeckCache | null = null;
 let rateLimiter: RateLimiter | null = null;
 
 // Helper functions
-const createError = (message: string, status = 400, rateLimit?: { headers: Record<string, string> }) => {
+const createError = (
+  message: string,
+  status = 400,
+  rateLimit?: { headers: Record<string, string> },
+) => {
   return new Response(
     JSON.stringify({ error: message } as ErrorResponse),
     {
@@ -37,27 +41,29 @@ const createError = (message: string, status = 400, rateLimit?: { headers: Recor
 
 const calculateBackoff = (retries: number): number => {
   return Math.min(
-    REQUEST_CONFIG.baseTimeout * Math.pow(REQUEST_CONFIG.backoffFactor, retries),
+    REQUEST_CONFIG.baseTimeout *
+      Math.pow(REQUEST_CONFIG.backoffFactor, retries),
     REQUEST_CONFIG.maxTimeout,
   );
 };
 
 const processMoxfieldData = (moxfieldData: MoxfieldResponse): ProcessedDeck => {
-  const commander = moxfieldData.commanders && Object.values(moxfieldData.commanders)[0]
-    ? {
-      quantity: 1,
-      name: Object.values(moxfieldData.commanders)[0].card.name,
-    }
-    : null;
+  const commander =
+    moxfieldData.commanders && Object.values(moxfieldData.commanders)[0]
+      ? {
+        quantity: 1,
+        name: Object.values(moxfieldData.commanders)[0].card.name,
+      }
+      : null;
 
-  const cards = moxfieldData.mainboard
+  const mainDeck = moxfieldData.mainboard
     ? Object.values(moxfieldData.mainboard).map((card) => ({
       quantity: card.quantity,
       name: card.card.name,
     }))
     : [];
 
-  return { cards, commander };
+  return { mainDeck, commander };
 };
 
 const fetchDeckFromMoxfield = async (
@@ -78,7 +84,9 @@ const fetchDeckFromMoxfield = async (
   );
 
   if (!Deno.env.get("DENO_DEPLOYMENT_ID")) {
-    console.log(`Fetched deck: https://api.moxfield.com/v2/decks/all/${deckId}`);
+    console.log(
+      `Fetched deck: https://api.moxfield.com/v2/decks/all/${deckId}`,
+    );
   }
 
   return response;
@@ -95,7 +103,7 @@ export const handler = async (
   if (isBuildMode()) {
     return new Response(
       JSON.stringify({ error: "Service unavailable during build" }),
-      { status: 503, headers: JSON_HEADERS }
+      { status: 503, headers: JSON_HEADERS },
     );
   }
 
@@ -169,7 +177,9 @@ export const handler = async (
         if (!response.ok) {
           if (response.status === 429 && retries < REQUEST_CONFIG.maxRetries) {
             retries++;
-            await new Promise((resolve) => setTimeout(resolve, calculateBackoff(retries)));
+            await new Promise((resolve) =>
+              setTimeout(resolve, calculateBackoff(retries))
+            );
             continue;
           }
 
@@ -189,14 +199,15 @@ export const handler = async (
         }
 
         if (error instanceof Error) {
-          const isNetworkError = 
-            error.name === "AbortError" ||
+          const isNetworkError = error.name === "AbortError" ||
             error.name === "TypeError" ||
             error.message.includes("network");
 
           if (isNetworkError && retries < REQUEST_CONFIG.maxRetries) {
             retries++;
-            await new Promise((resolve) => setTimeout(resolve, calculateBackoff(retries)));
+            await new Promise((resolve) =>
+              setTimeout(resolve, calculateBackoff(retries))
+            );
             continue;
           }
 
@@ -232,7 +243,7 @@ export const handler = async (
       );
     }
 
-    if (processedDeck.cards.length === 0) {
+    if (!processedDeck.mainDeck.length) {
       return createError(
         "Deck contains no cards in the mainboard",
         400,

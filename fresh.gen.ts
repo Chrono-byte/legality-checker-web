@@ -9,6 +9,7 @@ import * as $api_fetch_deck from "./routes/api/fetch-deck.ts";
 import * as $banlist from "./routes/banlist.tsx";
 import * as $deck_checker from "./routes/deck-checker.tsx";
 import * as $index from "./routes/index.tsx";
+import * as $rules from "./routes/rules.tsx";
 import * as $DeckLegalityChecker from "./islands/DeckLegalityChecker.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
@@ -21,6 +22,7 @@ const manifest = {
     "./routes/banlist.tsx": $banlist,
     "./routes/deck-checker.tsx": $deck_checker,
     "./routes/index.tsx": $index,
+    "./routes/rules.tsx": $rules,
   },
   islands: {
     "./islands/DeckLegalityChecker.tsx": $DeckLegalityChecker,

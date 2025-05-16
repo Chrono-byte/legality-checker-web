@@ -1,86 +1,90 @@
 export default function Home() {
   return (
-    <div class="px-4 py-8 mx-auto">
-      <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
-        <header class="w-full text-center mb-8">
-          <h1 class="text-4xl font-bold text-green-700">
+    <div class="min-h-screen bg-gradient-to-b from-green-50 to-white">
+      <div class="px-4 py-12 mx-auto">
+        {/* Hero Section */}
+        <div class="max-w-4xl mx-auto text-center mb-16">
+          <h1 class="text-5xl font-bold text-green-700 mb-6">
             Pioneer Highlander
           </h1>
-          <p class="mt-2 text-gray-600">
-            A singleton format for Pioneer, based on Commander.
+          <p class="text-xl text-gray-700 mb-8">
+            A singleton format that brings Commander's variety to Pioneer
           </p>
-        </header>
+          <div class="flex justify-center space-x-4">
+            <a
+              href="/deck-checker"
+              class="bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all"
+            >
+              Check Your Deck
+            </a>
+            <a
+              href="/rules"
+              class="bg-white hover:bg-green-50 text-green-700 font-bold py-3 px-8 rounded-lg border-2 border-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all"
+            >
+              Learn More
+            </a>
+          </div>
+        </div>
 
-        <section class="mt-6 mb-6 w-full max-w-2xl mx-auto p-6 bg-green-50 rounded-lg shadow-sm">
-          <h2 class="text-2xl font-semibold text-green-700 mb-3">
-            Format Philosophy
-          </h2>
-          <div class="prose text-gray-700">
-            <p class="mb-2">
-              Pioneer Highlander (PHL) was created to combine the strategic
-              depth of singleton formats with the balanced and accessible card
-              pool of Pioneer.
+        {/* Content Grid */}
+        <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4">
+          {/* Format Overview */}
+          <div class="bg-white p-8 rounded-lg shadow-sm">
+            <h2 class="text-2xl font-semibold text-green-700 mb-4">
+              What is Pioneer Highlander?
+            </h2>
+            <p class="text-gray-600">
+              Pioneer Highlander combines the best aspects of Commander with
+              Pioneer's balanced card pool. Build a 100-card singleton deck with
+              your favorite legendary creature as your commander.
             </p>
-            <p class="mb-2">
-              By restricting our card pool to Pioneer-legal cards, we achieve
-              several goals:
-            </p>
-            <ul class="list-disc pl-5 mb-4">
+          </div>
+
+          {/* Getting Started */}
+          <div class="bg-white p-8 rounded-lg shadow-sm">
+            <h2 class="text-2xl font-semibold text-green-700 mb-4">
+              Getting Started
+            </h2>
+            <ul class="text-gray-600 space-y-2">
               <li>
-                Building on a format actively supported and balanced by Wizards
-                of the Coast
+                • Choose any Pioneer-legal legendary creature as your commander
               </li>
               <li>
-                Creating a diverse metagame where deck-building creativity is
-                rewarded
+                • Build a 100-card singleton deck in your commander's colors
               </li>
-              <li>
-                Offering a more accessible entry point compared to other
-                singleton formats
-              </li>
+              <li>• Use Pioneer-legal cards (with a few special exceptions)</li>
             </ul>
           </div>
-        </section>
 
-        <section class="mt-6 mb-6 w-full max-w-2xl mx-auto p-6 bg-green-50 rounded-lg shadow-sm">
-          <h2 class="text-2xl font-semibold text-green-700 mb-3">
-            Core Rules
-          </h2>
-          <div class="prose text-gray-700">
-            <ul class="list-disc pl-5 mb-4">
-              <li>
-                Decks must follow all normal Commander deckbuilding rules (
-                <a
-                  href="https://mtgcommander.net/index.php/rules/"
-                  class="text-green-700 hover:underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  see Commander rules
-                </a>
-                )
-              </li>
-              <li>
-                A separate{" "}
-                <a href="/banlist" class="text-green-700 hover:underline">
-                  banlist
-                </a>{" "}
-                applies specifically to Pioneer Highlander, which bans the few
-                cards in Pioneer that care about your commander
-              </li>
-            </ul>
-            <div class="mt-4 flex justify-center">
+          {/* Resources */}
+          <div class="bg-white p-8 rounded-lg shadow-sm">
+            <h2 class="text-2xl font-semibold text-green-700 mb-4">
+              Resources
+            </h2>
+            <div class="space-y-3">
+              <a
+                href="/rules"
+                class="block text-green-700 hover:text-green-800 font-medium"
+              >
+                📋 Complete Format Rules
+              </a>
+              <a
+                href="/banlist"
+                class="block text-green-700 hover:text-green-800 font-medium"
+              >
+                🚫 Banlist & Special Cards
+              </a>
               <a
                 href="/deck-checker"
-                class="bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                class="block text-green-700 hover:text-green-800 font-medium"
               >
-                Check Your Deck's Legality
+                ✓ Deck Legality Checker
               </a>
             </div>
           </div>
-        </section>
+        </div>
 
-        <footer class="mt-8 text-center text-sm text-gray-500">
+        <footer class="mt-16 text-center text-sm text-gray-500">
           <p>
             Created by{" "}
             <a

@@ -62,7 +62,7 @@ export class DeckCache {
         count++;
       }
     }
-    
+
     // Log cleanup in development environment
     if (count > 0 && !Deno.env.get("DENO_DEPLOYMENT_ID")) {
       console.log(`Cache cleanup: removed ${count} expired entries`);

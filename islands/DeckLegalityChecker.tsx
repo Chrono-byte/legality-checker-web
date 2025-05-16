@@ -9,7 +9,7 @@ interface Card {
 
 // Define the Decklist interface
 interface Decklist {
-  cards: Card[];
+  mainDeck: Card[];
   commander: Card;
 }
 
@@ -49,9 +49,12 @@ export default function DeckLegalityChecker() {
       return;
     }
 
+    // Clear all previous state
     setLoading(true);
     setLegalityStatus("Checking deck legality...");
     setResult(null);
+    setCommander(null);
+    setColorIdentity([]);
 
     try {
       // Extract deck ID from URL if it's a Moxfield URL
@@ -77,7 +80,6 @@ export default function DeckLegalityChecker() {
       const legalityResult = await checkPHLLegality(decklist);
 
       // Update UI with results
-      console.log('Legality check result:', legalityResult);
       setResult(legalityResult);
       setCommander(legalityResult.commander);
       setColorIdentity(legalityResult.colorIdentity || []);
@@ -305,105 +307,148 @@ export default function DeckLegalityChecker() {
   }
 
   return (
-    <div class="flex flex-col gap-4 py-6 w-full max-w-lg">
-      <h2 class="text-2xl font-bold">PHL Deck Legality Checker</h2>
-      <div class="flex flex-col gap-2">
-        <label for="deck-url" class="font-medium">
-          Enter Moxfield Deck URL or ID:
-        </label>
-        <input
-          id="deck-url"
-          type="text"
-          value={deckUrl}
-          onInput={(e) => setDeckUrl((e.target as HTMLInputElement).value)}
-          class="px-3 py-2 border border-gray-300 rounded-md"
-          placeholder="https://www.moxfield.com/decks/example"
-          disabled={loading}
-        />
+    <div class="w-full max-w-2xl mx-auto">
+      <div class="bg-white rounded-lg shadow-sm p-8 mb-8">
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-2">
+            <label for="deck-url" class="text-lg font-semibold text-gray-700">
+              Enter Moxfield Deck URL:
+            </label>
+            <input
+              id="deck-url"
+              type="text"
+              value={deckUrl}
+              onInput={(e) => setDeckUrl((e.target as HTMLInputElement).value)}
+              class="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+              placeholder="https://www.moxfield.com/decks/example"
+              disabled={loading}
+            />
+          </div>
+
+          <Button
+            onClick={checkDeckLegality}
+            disabled={loading}
+            class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+          >
+            {loading ? "Checking..." : "Check Deck Legality"}
+          </Button>
+        </div>
       </div>
 
-      <Button
-        onClick={checkDeckLegality}
-        disabled={loading}
-        class="mt-2"
-      >
-        {loading ? "Checking..." : "Check Deck Legality"}
-      </Button>
-
       {legalityStatus && (
-        <div class="mt-4 p-4 border rounded-md bg-gray-50">
-          <p class="text-xl font-bold">{legalityStatus}</p>
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+          {/* Status Header */}
+          <div class={`p-6 ${result?.legal ? "bg-green-50" : "bg-red-50"}`}>
+            <p
+              class={`text-2xl font-bold ${
+                result?.legal ? "text-green-700" : "text-red-700"
+              }`}
+            >
+              {legalityStatus}
+            </p>
+          </div>
 
+          {/* Deck Info */}
           {commander && (
-            <div class="mt-2">
-              <p>
-                <strong>Commander:</strong> {commander}
-              </p>
-              <p>
-                <strong>Color Identity:</strong> {colorIdentity.join(", ")}
-              </p>
-
-              {result?.deckSize && (
+            <div class="border-t border-gray-100 p-6">
+              <h3 class="text-xl font-semibold text-gray-800 mb-4">
+                Deck Information
+              </h3>
+              <div class="space-y-2">
                 <p>
-                  <strong>Deck Size:</strong> {result.deckSize} cards (Required:
-                  {" "}
-                  {result.requiredSize})
+                  <span class="font-medium text-gray-700">Commander:</span>{" "}
+                  <span class="text-gray-900">{commander}</span>
                 </p>
-              )}
+                <p>
+                  <span class="font-medium text-gray-700">Color Identity:</span>
+                  {" "}
+                  <span class="text-gray-900">{colorIdentity.join(", ")}</span>
+                </p>
+                {result?.deckSize != null && (
+                  <p>
+                    <span class="font-medium text-gray-700">Deck Size:</span>
+                    {" "}
+                    <span class="text-gray-900">
+                      {result.deckSize} cards (Required: {result.requiredSize})
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Display legality issues if not legal */}
+          {/* Legality Issues */}
           {result && !result.legal && (
-            <div class="mt-4">
-              <h3 class="font-bold">Legality Issues:</h3>
-              <ul class="list-disc ml-6 mt-1">
+            <div class="border-t border-gray-100 p-6 bg-red-50">
+              <h3 class="text-xl font-semibold text-red-700 mb-3">
+                Legality Issues
+              </h3>
+              <ul class="space-y-2">
                 {getLegalityIssues().map((issue, index) => (
-                  <li key={index} class="text-red-600">{issue}</li>
+                  <li key={index} class="text-red-600 flex items-start">
+                    <span class="mr-2">•</span>
+                    <span>{issue}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Show cards with color identity violations */}
-          {result?.colorIdentityViolations &&
-            result.colorIdentityViolations.length > 0 && (
-            <div class="mt-4">
-              <h3 class="font-bold">
-                Color Identity Violations ({result.colorIdentityViolations
-                  .length}):
-              </h3>
-              <ul class="list-disc ml-6 mt-1">
-                {result.colorIdentityViolations.map((card) => (
-                  <li key={card}>{card}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Detailed Issues */}
+          {result && (
+            <div class="border-t border-gray-100 p-6">
+              <div class="space-y-6">
+                {result.colorIdentityViolations &&
+                  result.colorIdentityViolations.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                      Color Identity Violations ({result.colorIdentityViolations
+                        .length})
+                    </h3>
+                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {result.colorIdentityViolations.map((card) => (
+                        <li key={card} class="text-red-600 flex items-start">
+                          <span class="mr-2">•</span>
+                          <span>{card}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-          {/* Show cards that violate singleton rule */}
-          {result?.nonSingletonCards && result.nonSingletonCards.length > 0 && (
-            <div class="mt-4">
-              <h3 class="font-bold">
-                Non-Singleton Cards ({result.nonSingletonCards.length}):
-              </h3>
-              <ul class="list-disc ml-6 mt-1">
-                {result.nonSingletonCards.map((card) => (
-                  <li key={card}>{card}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+                {result.nonSingletonCards &&
+                  result.nonSingletonCards.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                      Non-Singleton Cards ({result.nonSingletonCards.length})
+                    </h3>
+                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {result.nonSingletonCards.map((card) => (
+                        <li key={card} class="text-red-600 flex items-start">
+                          <span class="mr-2">•</span>
+                          <span>{card}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-          {/* Show illegal cards */}
-          {result?.illegalCards && result.illegalCards.length > 0 && (
-            <div class="mt-4">
-              <h3 class="font-bold">
-                Illegal Cards ({result.illegalCards.length}):
-              </h3>
-              <ul class="list-disc ml-6 mt-1">
-                {result.illegalCards.map((card) => <li key={card}>{card}</li>)}
-              </ul>
+                {result.illegalCards && result.illegalCards.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                      Illegal Cards ({result.illegalCards.length})
+                    </h3>
+                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {result.illegalCards.map((card) => (
+                        <li key={card} class="text-red-600 flex items-start">
+                          <span class="mr-2">•</span>
+                          <span>{card}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -1,11 +1,29 @@
-import type {
-  IScryfallCard,
-  IScryfallColor as _IScryfallColor,
-} from "npm:scryfall-types";
+import type { IScryfallCard } from "npm:scryfall-types";
+
+// Define data and cache directories
+const DATA_DIR = "./data";
+const CACHE_DIR = "./cache";
+
+interface DeckCard {
+  quantity: number;
+  name: string;
+}
+
+interface DeckList {
+  mainDeck: DeckCard[];
+  commander: DeckCard;
+}
+
+interface CardValidationResult {
+  legalCards: IScryfallCard[];
+  illegalCards: string[];
+}
 
 // Utility function to read and parse a CSV file into an array of trimmed card names
 async function loadCardList(filename: string): Promise<string[]> {
-  const text = await Deno.readTextFile(new URL(filename, import.meta.url));
+  const text = await Deno.readTextFile(
+    new URL(`${DATA_DIR}/${filename}`, import.meta.url),
+  );
   return text
     .split("\n")
     .map((line) => line.replace(/"/g, "").trim())
@@ -15,17 +33,20 @@ async function loadCardList(filename: string): Promise<string[]> {
 // Load lists concurrently
 const [bannedListArray, allowedListArray, singletonExceptionsArray] =
   await Promise.all([
-    loadCardList("./banned_list.csv"),
-    loadCardList("./allowed_list.csv"),
-    loadCardList("./singleton_exceptions.csv"),
+    loadCardList("banned_list.csv"),
+    loadCardList("allowed_list.csv"),
+    loadCardList("singleton_exceptions.csv"),
   ]);
 
+/**
+ * Manages card data, legality checks, and deck validation for the format
+ */
 export default class CardManager {
-  cards: IScryfallCard[];
-  bannedList: string[];
-  allowedList: string[];
-  singletonExceptions: string[];
-  cardLegality: Map<string, boolean>;
+  private cards: IScryfallCard[];
+  private readonly bannedList: string[];
+  private readonly allowedList: string[];
+  private readonly singletonExceptions: string[];
+  private readonly cardLegality: Map<string, boolean>;
 
   constructor() {
     this.cards = [];
@@ -34,207 +55,241 @@ export default class CardManager {
     this.singletonExceptions = singletonExceptionsArray;
     this.cardLegality = new Map();
 
-    this.loadCards();
+    void this.loadCards();
   }
-  async loadCards() {
+
+  /**
+   * Loads card data from the cache file or downloads it if not available
+   * @throws Error if card data cannot be loaded or downloaded
+   */
+  async loadCards(): Promise<void> {
     try {
-      const data = await Deno.readTextFile(
-        new URL("./cards.json", import.meta.url),
-      );
+      const filePath = new URL(`${CACHE_DIR}/cards.json`, import.meta.url);
+      const data = await Deno.readTextFile(filePath);
       this.cards = JSON.parse(data) as IScryfallCard[];
       console.log(`Loaded ${this.cards.length} cards from cards.json`);
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         console.log("cards.json not found, downloading cards...");
         await this.downloadCards();
+      } else if (error instanceof SyntaxError) {
+        console.error("Error parsing cards.json, redownloading...");
+        await this.downloadCards();
       } else {
         console.error("Error loading cards:", error);
+        throw error; // Re-throw unexpected errors
       }
     }
   }
 
-  async downloadCards(retryCount = 3): Promise<void> {
+  /**
+   * Downloads and processes card data from Scryfall
+   * @param retryCount Number of retries for failed requests
+   * @throws Error if card data cannot be downloaded after all retries
+   */
+  private async downloadCards(retryCount = 3): Promise<void> {
     try {
       const controller = new AbortController();
-      let timeoutId: number | undefined;
       const timeoutMs = 30000;
-
-      const fetchWithRetry = async (
-        url: string,
-        options: RequestInit,
-        maxRetries: number,
-      ): Promise<Response> => {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            const response = await fetch(url, options);
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response;
-          } catch (error) {
-            if (attempt === maxRetries) throw error;
-            console.log(`Attempt ${attempt} failed, retrying...`);
-            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
-          }
-        }
-        throw new Error("All retry attempts failed");
-      };
-
-      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       console.log("Fetching Scryfall bulk data information...");
-
-      const response = await fetchWithRetry(
-        "https://api.scryfall.com/bulk-data/oracle-cards",
-        {
-          signal: controller.signal,
-          headers: {
-            "Accept": "application/json",
-            "User-Agent": "PHL-Legality-Checker",
-          },
-          cache: "force-cache",
-          keepalive: true,
-        },
-        retryCount,
-      );
-
+      const bulkData = await this.fetchBulkData(controller.signal, retryCount);
       clearTimeout(timeoutId);
 
-      const data = await response.json();
-      const bulkDataUrl = data.download_uri;
+      console.log(`Successfully downloaded ${bulkData.length} cards from Scryfall`);
 
-      console.log("Fetching bulk card data from:", bulkDataUrl);
+      // Filter cards to include only physical cards
+      const pdhCards = bulkData.filter((card) => card.games.includes("paper"));
 
-      const bulkController = new AbortController();
-      timeoutId = setTimeout(() => bulkController.abort(), 120000);
+      // Calculate statistics
+      const stats = this.calculateCardStats(pdhCards);
+      this.logCardStats(stats);
 
-      const bulkDataResponse = await fetchWithRetry(
-        bulkDataUrl,
-        {
-          signal: bulkController.signal,
-          headers: {
-            "Accept": "application/json",
-            "User-Agent": "PHL-Legality-Checker",
-          },
-          cache: "force-cache",
-        },
-        retryCount,
-      );
-
-      clearTimeout(timeoutId);
-
-      const bulkData = await bulkDataResponse.json() as IScryfallCard[];
-
-      console.log(
-        `Successfully downloaded ${bulkData.length} cards from Scryfall`,
-      );
-
-      // Filter cards based on our requirements:
-      // 1. Must be a paper card
-      // 2. Must be in Pioneer or a supplemental set
-      // 3. Not on our banned list
-      // 4. On our allowed list, if not Pioneer legal
-      const pdhCards = bulkData.filter((card: IScryfallCard) => {
-        // Must be a paper card
-        if (!card.games.includes("paper")) return false;
-
-        // // Check if it's in our allowed list
-        // if (this.allowedList.includes(card.name)) return true;
-
-        // // Check if it's on our banned list
-        // if (this.bannedList.includes(card.name)) return false;
-
-        // // Check Pioneer legality
-        // return card.legalities.pioneer === "legal";
-        return true;
-      });
-
-      // Calculate and log some statistics
-      const bannedCount = bulkData.filter((card) =>
-        this.bannedList.includes(card.name)
-      ).length;
-      const allowedCount = bulkData.filter((card) =>
-        this.allowedList.includes(card.name)
-      ).length;
-      const pioneerLegalCount =
-        pdhCards.filter((card) => card.legalities.pioneer === "legal").length;
-
-      console.log(`Statistics:
-        - Total cards filtered: ${pdhCards.length}
-        - Pioneer legal: ${pioneerLegalCount}
-        - Banned cards: ${bannedCount}
-        - Allowed list additions: ${allowedCount}
-      `);
-
-      // write filtered data to disk with efficient JSON stringification
-      const jsonString = JSON.stringify(pdhCards);
-      await Deno.writeTextFile(
-        new URL("./cards.json", import.meta.url),
-        jsonString,
-      );
+      // Cache the filtered data
+      await this.cacheCardData(pdhCards);
 
       // Reload the cards into memory
-      this.loadCards();
-
+      await this.loadCards();
       console.log("Successfully processed and saved card data");
     } catch (error) {
       console.error("Error fetching bulk card data:", error);
-
-      // If we have retries left, try again
       if (retryCount > 0) {
-        console.log(
-          `Retrying download... (${retryCount - 1} attempts remaining)`,
-        );
+        console.log(`Retrying download... (${retryCount - 1} attempts remaining)`);
         await this.downloadCards(retryCount - 1);
       } else {
-        throw new Error(
-          "Failed to download card data after all retry attempts",
-        );
+        throw new Error("Failed to download card data after all retry attempts");
       }
     }
   }
 
-  // decklists are provided as a string with each card on a new line with a number of copies followed by the card name
-  parseDeckList(
-    deckList: string,
-  ): [
-    { quantity: number; name: string }[],
-    { quantity: number; name: string },
-  ] {
-    // find our empty line that separates the main deck from the commander
-    const commanderIndex = deckList.split("\n").findIndex((line) =>
-      line === ""
+  /**
+   * Fetches bulk data from Scryfall API
+   * @param signal AbortSignal for request cancellation
+   * @param retryCount Number of retries for failed requests
+   */
+  private async fetchBulkData(
+    signal: AbortSignal,
+    retryCount: number,
+  ): Promise<IScryfallCard[]> {
+    const response = await this.fetchWithRetry(
+      "https://api.scryfall.com/bulk-data/oracle-cards",
+      {
+        signal,
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "PHL-Legality-Checker",
+        },
+        cache: "force-cache",
+      },
+      retryCount,
     );
 
-    // split the decklist into the main deck and the commander
-    const mainDeck = deckList.split("\n").slice(0, commanderIndex);
-    const commander = deckList.split("\n")[commanderIndex + 1];
+    const data = await response.json();
+    const bulkDataUrl = data.download_uri;
 
-    let commanderCard: { quantity: number; name: string } | null = null;
+    console.log("Fetching bulk card data from:", bulkDataUrl);
+    const bulkDataResponse = await this.fetchWithRetry(
+      bulkDataUrl,
+      {
+        signal,
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "PHL-Legality-Checker",
+        },
+        cache: "force-cache",
+      },
+      retryCount,
+    );
 
-    // find the commander in the cards array
-    if (commander) {
-      const [quantity, ...cardName] = commander.split(" ");
-      commanderCard = {
-        quantity: parseInt(quantity),
-        name: cardName.join(" "),
-      };
-    } else if (!commanderCard) {
-      throw new Error("Commander not found");
+    return await bulkDataResponse.json() as IScryfallCard[];
+  }
+
+  /**
+   * Fetches data with retry logic
+   * @param url URL to fetch from
+   * @param options Fetch options
+   * @param maxRetries Maximum number of retries
+   */
+  private async fetchWithRetry(
+    url: string,
+    options: RequestInit,
+    maxRetries: number,
+  ): Promise<Response> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response;
+      } catch (error) {
+        if (attempt === maxRetries) throw error;
+        console.log(`Attempt ${attempt} failed, retrying...`);
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+    throw new Error("All retry attempts failed");
+  }
+
+  /**
+   * Calculates card statistics
+   */
+  private calculateCardStats(cards: IScryfallCard[]): {
+    totalCards: number;
+    pioneerLegal: number;
+    banned: number;
+    allowed: number;
+  } {
+    return {
+      totalCards: cards.length,
+      pioneerLegal: cards.filter((card) => card.legalities.pioneer === "legal")
+        .length,
+      banned: cards.filter((card) => this.bannedList.includes(card.name)).length,
+      allowed: cards.filter((card) => this.allowedList.includes(card.name)).length,
+    };
+  }
+
+  /**
+   * Logs card statistics to console
+   */
+  private logCardStats(stats: {
+    totalCards: number;
+    pioneerLegal: number;
+    banned: number;
+    allowed: number;
+  }): void {
+    console.log(`Statistics:
+      - Total cards filtered: ${stats.totalCards}
+      - Pioneer legal: ${stats.pioneerLegal}
+      - Banned cards: ${stats.banned}
+      - Allowed list additions: ${stats.allowed}
+    `);
+  }
+
+  /**
+   * Caches card data to disk
+   */
+  private async cacheCardData(cards: IScryfallCard[]): Promise<void> {
+    const filePath = new URL(`${CACHE_DIR}/cards.json`, import.meta.url);
+    const jsonString = JSON.stringify(cards);
+    await Deno.writeTextFile(filePath, jsonString);
+  }
+
+  /**
+   * Parses a deck list string into a structured format
+   * @param deckList Raw deck list string with quantity and card names
+   * @returns Parsed deck list with main deck and commander
+   */
+  parseDeckList(deckList: string): DeckList {
+    const lines = deckList.split("\n");
+    const commanderIndex = lines.findIndex((line) => line.trim() === "");
+    
+    if (commanderIndex === -1) {
+      throw new Error("Invalid deck list format: No separator line found");
     }
 
-    // split the main deck into an array of that contains the quantity and card object
-    const deckListArray = mainDeck.map((line) => {
-      const [quantity, ...cardName] = line.split(" ");
+    const mainDeckLines = lines.slice(0, commanderIndex);
+    const commanderLine = lines[commanderIndex + 1]?.trim();
+
+    if (!commanderLine) {
+      throw new Error("Invalid deck list format: No commander found");
+    }
+
+    const [quantityStr, ...cardName] = commanderLine.split(" ");
+    const quantity = parseInt(quantityStr, 10);
+    
+    if (isNaN(quantity) || quantity < 1) {
+      throw new Error(`Invalid commander quantity: ${quantityStr}`);
+    }
+
+    const commander: DeckCard = {
+      quantity,
+      name: cardName.join(" "),
+    };
+
+    const mainDeck = mainDeckLines.map((line): DeckCard => {
+      const [quantityStr, ...cardName] = line.split(" ");
+      const quantity = parseInt(quantityStr, 10);
+      
+      if (isNaN(quantity) || quantity < 1) {
+        throw new Error(`Invalid quantity in line: ${line}`);
+      }
+
       return {
-        quantity: parseInt(quantity),
+        quantity,
         name: cardName.join(" "),
       };
     });
 
-    return [deckListArray, commanderCard];
+    return { mainDeck, commander };
   }
 
+  /**
+   * Checks if a card is a double-faced card and finds its data
+   * @param cardName Name of the card to search for
+   * @returns Card data if found, null otherwise
+   */
   private findDFCCard(cardName: string): IScryfallCard | null {
     return this.cards.find(
       (c) =>
@@ -243,6 +298,12 @@ export default class CardManager {
     ) || null;
   }
 
+  /**
+   * Determines if a card is legal in the format
+   * @param cardName Name of the card to check
+   * @param cardData Card data from Scryfall
+   * @returns Whether the card is legal
+   */
   private isCardLegal(
     cardName: string,
     cardData: IScryfallCard | null,
@@ -253,6 +314,12 @@ export default class CardManager {
         !this.bannedList.includes(cardName));
   }
 
+  /**
+   * Adds multiple copies of a card to the legal cards list
+   * @param card Card data to add
+   * @param quantity Number of copies to add
+   * @param legalCards List to add the cards to
+   */
   private addCardToList(
     card: IScryfallCard,
     quantity: number,
@@ -263,12 +330,22 @@ export default class CardManager {
     }
   }
 
+  /**
+   * Checks if a card is a token card
+   * @param card Card data to check
+   * @returns Whether the card is a token
+   */
   private isToken(card: IScryfallCard): boolean {
     return card.layout === "token" ||
       card.type_line?.toLowerCase().includes("token") ||
       card.layout === "double_faced_token";
   }
 
+  /**
+   * Finds a non-token card by name
+   * @param cardName Name of the card to find
+   * @returns Card data if found, null otherwise
+   */
   private findRealCard(cardName: string): IScryfallCard | null {
     const matchingCards = this.cards.filter((c) => c.name === cardName);
     // If we have multiple cards with the same name, prefer non-tokens
@@ -280,6 +357,11 @@ export default class CardManager {
     return card && !this.isToken(card) ? card : null;
   }
 
+  /**
+   * Gets a card with its legality information
+   * @param cardName Name of the card to get
+   * @returns Card data with format legality if found, null otherwise
+   */
   private getCardWithLegality(cardName: string): IScryfallCard | null {
     const card = this.findRealCard(cardName);
     if (!card) return null;
@@ -294,6 +376,13 @@ export default class CardManager {
     };
   }
 
+  /**
+   * Validates a single card and updates the legal/illegal lists
+   * @param cardName Name of the card to check
+   * @param quantity Number of copies
+   * @param legalCards List of legal cards to update
+   * @param illegalCards List of illegal cards to update
+   */
   private checkCardLegality(
     cardName: string,
     quantity: number,
@@ -343,27 +432,29 @@ export default class CardManager {
     this.addCardToList(cardData, quantity, legalCards);
   }
 
-  testDecklist(
-    deckList: { quantity: number; name: string }[],
-    commander: { quantity: number; name: string },
-  ): [IScryfallCard[], string[]] {
+  /**
+   * Tests a decklist for format legality
+   * @param deckList The deck list to test
+   * @returns Object containing arrays of legal and illegal cards
+   */
+  testDecklist(deckList: DeckList): CardValidationResult {
     const legalCards: IScryfallCard[] = [];
     const illegalCards: string[] = [];
 
     // Check commander legality first
     this.checkCardLegality(
-      commander.name,
-      commander.quantity,
+      deckList.commander.name,
+      deckList.commander.quantity,
       legalCards,
       illegalCards,
     );
 
     // Check legality for each card in the decklist
-    for (const { name: cardName, quantity } of deckList) {
-      this.checkCardLegality(cardName, quantity, legalCards, illegalCards);
+    for (const { name, quantity } of deckList.mainDeck) {
+      this.checkCardLegality(name, quantity, legalCards, illegalCards);
     }
 
-    return [legalCards, illegalCards];
+    return { legalCards, illegalCards };
   }
 
   fetchCard(cardName: string): IScryfallCard | null {

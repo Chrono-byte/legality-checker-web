@@ -9,7 +9,7 @@ interface Card {
 }
 
 interface DeckLegalityRequest {
-  cards: Card[];
+  mainDeck: Card[];
   commander: Card;
 }
 
@@ -56,12 +56,16 @@ const BASIC_LANDS = new Set([
 ]);
 
 // Helper functions
-const createError = (message: string, status = 400) => new Response(
-  JSON.stringify({ error: message }),
-  { status, headers: JSON_HEADERS },
-);
+const createError = (message: string, status = 400) =>
+  new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: JSON_HEADERS },
+  );
 
-const checkCommander = (commander: Card, commanderData: IScryfallCard | null): Response | null => {
+const checkCommander = (
+  commander: Card,
+  commanderData: IScryfallCard | null,
+): Response | null => {
   if (!commanderData) {
     return new Response(
       JSON.stringify({
@@ -114,7 +118,7 @@ export const handler = async (
       JSON.stringify({ error: "Service unavailable during build" }),
       { status: 503, headers: JSON_HEADERS },
     );
-  };
+  }
   try {
     // Validate request method
     if (req.method !== "POST") {
@@ -127,31 +131,71 @@ export const handler = async (
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       const clonedReq = req.clone();
-      body = await clonedReq.json();
+      const rawBody = await clonedReq.json();
+      console.log('Received request body:', {
+        mainDeckLength: rawBody.mainDeck?.length,
+        hasCommander: !!rawBody.commander,
+        mainDeckFirst: rawBody.mainDeck?.[0],
+        commander: rawBody.commander
+      });
+      body = rawBody;
       clearTimeout(timeoutId);
     } catch (parseError) {
+      console.error('Parse error:', parseError);
       return createError(`Failed to parse request body: ${String(parseError)}`);
     }
 
     // Validate request data
-    const { cards, commander } = body;
-    if (!cards?.length || !commander) {
-      return createError("Invalid deck data");
+    const { mainDeck, commander } = body;
+    
+    // Validate mainDeck
+    if (!Array.isArray(mainDeck)) {
+      return createError("Invalid deck data: mainDeck must be an array");
+    }
+    if (!mainDeck.length) {
+      return createError("Invalid deck data: mainDeck cannot be empty");
+    }
+    
+    // Validate commander
+    if (!commander) {
+      return createError("Invalid deck data: commander is required");
+    }
+    if (typeof commander.name !== 'string' || !commander.name) {
+      return createError("Invalid deck data: commander must have a valid name");
+    }
+    if (typeof commander.quantity !== 'number' || commander.quantity < 1) {
+      return createError("Invalid deck data: commander must have a valid quantity");
+    }
+    
+    // Validate mainDeck entries
+    for (const card of mainDeck) {
+      if (typeof card.name !== 'string' || !card.name) {
+        return createError(`Invalid deck data: card in mainDeck must have a valid name`);
+      }
+      if (typeof card.quantity !== 'number' || card.quantity < 1) {
+        return createError(`Invalid deck data: card '${card.name}' must have a valid quantity`);
+      }
     }
 
     // Validate commander and cache it
     const commanderData = cardManager.fetchCard(commander.name);
     const commanderError = checkCommander(commander, commanderData);
     if (commanderError) return commanderError;
-    
+
     // We can now safely assert commanderData is not null since checkCommander would have returned
     const validCommanderData = commanderData as IScryfallCard;
 
     // Get deck legality information
-    const [_legalCards, illegalCards] = cardManager.testDecklist(cards, commander);
+    const { illegalCards } = cardManager.testDecklist({
+      mainDeck,
+      commander,
+    });
 
     // Calculate total cards
-    const cardQuantities = cards.reduce((total, card) => total + card.quantity, 0);
+    const cardQuantities = mainDeck.reduce(
+      (total: number, card: Card) => total + card.quantity,
+      0
+    );
     const totalCards = cardQuantities + commander.quantity;
 
     // Initialize legality checks
@@ -167,8 +211,11 @@ export const handler = async (
     const nonSingletonCards = new Set<string>();
     const cardCounts = new Map<string, number>();
 
-    for (const card of cards) {
-      if (!BASIC_LANDS.has(card.name) && !cardManager.singletonExceptions.includes(card.name)) {
+    for (const card of mainDeck) {
+      if (
+        !BASIC_LANDS.has(card.name) &&
+        !cardManager.isAllowedToBreakSingletonRule(card.name)
+      ) {
         const count = (cardCounts.get(card.name) || 0) + card.quantity;
         cardCounts.set(card.name, count);
         if (count > 1) {
@@ -183,7 +230,7 @@ export const handler = async (
     const colorIdentityViolations = new Set<string>();
     const cardDataCache = new Map<string, IScryfallCard>();
 
-    for (const card of cards) {
+    for (const card of mainDeck) {
       let cardData = cardDataCache.get(card.name);
       if (!cardData) {
         const fetchedCard = cardManager.fetchCard(card.name);
@@ -195,14 +242,17 @@ export const handler = async (
         }
       }
 
-      if (cardData && !cardData.color_identity.every(color => colorIdentity.has(color))) {
+      if (
+        cardData &&
+        !cardData.color_identity.every((color) => colorIdentity.has(color))
+      ) {
         legalChecks.colorIdentity = false;
         colorIdentityViolations.add(card.name);
       }
     }
 
     // Determine overall legality
-    const isLegal = Object.values(legalChecks).every(check => check);
+    const isLegal = Object.values(legalChecks).every((check) => check);
 
     // Construct response
     const response: LegalityResponse = {
@@ -215,8 +265,8 @@ export const handler = async (
       colorIdentityViolations: Array.from(colorIdentityViolations),
       nonSingletonCards: Array.from(nonSingletonCards),
       legalIssues: {
-        size: !legalChecks.size 
-          ? `Deck size incorrect: has ${totalCards} cards, needs 100` 
+        size: !legalChecks.size
+          ? `Deck size incorrect: has ${totalCards} cards, needs 100`
           : null,
         commander: !legalChecks.commander
           ? "Commander not legal in Pioneer"
@@ -240,6 +290,9 @@ export const handler = async (
     );
   } catch (error: unknown) {
     console.error("Error checking deck legality:", error);
-    return createError(error instanceof Error ? error.message : String(error), 500);
+    return createError(
+      error instanceof Error ? error.message : String(error),
+      500,
+    );
   }
 };
