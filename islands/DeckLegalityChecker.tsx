@@ -4,7 +4,6 @@ import DeckMetrics from "../components/DeckMetrics.tsx";
 import DetailedIssues from "../components/DetailedIssues.tsx";
 import DeckInput from "../components/DeckInput.tsx";
 import CommanderInfo from "../components/CommanderInfo.tsx";
-import CommanderBracketGauge from "./CommanderBracketGauge.tsx";
 
 // Define the Card interface for our decklist structure
 interface Card {
@@ -351,16 +350,7 @@ export default function DeckLegalityChecker() {
               imageUri={result.commanderImageUris?.normal}
               isLegal={result.legal}
               legalityIssues={getLegalityIssues()}
-            >
-              {
-                /* {true && (
-                <CommanderBracketGauge
-                  mainDeck={}
-                  commander={{ name: commander, quantity: 1 }}
-                />
-              )} */
-              }
-            </CommanderInfo>
+            />
           )}
 
           {result && (

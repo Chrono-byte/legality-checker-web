@@ -2,6 +2,7 @@ import { FreshContext } from "$fresh/server.ts";
 import { IScryfallCard } from "npm:scryfall-types";
 import CardManager from "../../CardManager/CardManager.ts";
 import { isBuildMode } from "../../utils/is-build.ts";
+import { RateLimiter } from "../../utils/rate-limiter.ts";
 
 /** Represents a single card in a deck with its quantity */
 interface Card {
@@ -82,6 +83,36 @@ interface LegalityResponse {
 // Constants
 const JSON_HEADERS = {
   "Content-Type": "application/json",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+};
+
+const SECURITY_HEADERS = {
+  ...JSON_HEADERS,
+  "Cache-Control": "no-store, max-age=0",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
+// Initialize utilities
+let rateLimiter: RateLimiter | null = null;
+
+// Helper functions
+const createError = (
+  message: string,
+  status = 400,
+  rateLimit?: { headers: Record<string, string> },
+) => {
+  return new Response(
+    JSON.stringify({ error: message }),
+    {
+      status,
+      headers: {
+        ...SECURITY_HEADERS,
+        ...(rateLimit?.headers || {}),
+      },
+    },
+  );
 };
 
 const BASIC_LANDS = new Set([
@@ -184,12 +215,6 @@ const validateDeckInput = (
 };
 
 // Helper functions
-const createError = (message: string, status = 400) =>
-  new Response(
-    JSON.stringify({ error: message }),
-    { status, headers: JSON_HEADERS },
-  );
-
 const checkCommander = (
   commander: Card,
   commanderData: IScryfallCard | null,
@@ -237,17 +262,48 @@ const cardManager = new CardManager();
 
 export const handler = async (
   req: Request,
-  _ctx: FreshContext,
+  ctx: FreshContext,
 ): Promise<Response> => {
   // Semi-verbose log: incoming request for legality check
   console.log(`[check-legality] ${req.method} ${req.url}`);
+
   // Skip during build but allow tests to run
   if (isBuildMode() && !Deno.env.get("DENO_TEST")) {
     return new Response(
       JSON.stringify({ error: "Service unavailable during build" }),
-      { status: 503, headers: JSON_HEADERS },
+      { status: 503, headers: SECURITY_HEADERS },
     );
   }
+
+  // Lazy initialization of rate limiter
+  if (!rateLimiter) {
+    try {
+      rateLimiter = new RateLimiter();
+    } catch (error) {
+      console.error(
+        "[check-legality] Failed to initialize rate limiter:",
+        error,
+      );
+      return createError("Service initialization error", 500);
+    }
+  }
+
+  // Get client IP and check rate limit
+  const clientIp = ctx.remoteAddr.hostname;
+  const rateLimit = rateLimiter.check(clientIp);
+  if (!rateLimit.allowed) {
+    return createError(
+      "Rate limit exceeded. Please try again later.",
+      429,
+      { headers: rateLimit.headers },
+    );
+  }
+
+  // Initialize rate limiter if not already initialized
+  if (!rateLimiter) {
+    rateLimiter = new RateLimiter(); // 100 requests per minute
+  }
+
   try {
     // Validate request method
     if (req.method !== "POST") {

@@ -33,38 +33,7 @@ export class CardLists {
   }
 
   /**
-   * Initialize the lists synchronously - only use in test mode
-   */
-  static initializeSync(): void {
-    if (this.initialized) return;
-
-    try {
-      this._bannedList = parseCardList(
-        Deno.readTextFileSync(
-          new URL(`${DATA_DIR}/banned_list.csv`, import.meta.url),
-        ),
-      );
-      this._allowedList = parseCardList(
-        Deno.readTextFileSync(
-          new URL(`${DATA_DIR}/allowed_list.csv`, import.meta.url),
-        ),
-      );
-      this._singletonExceptions = parseCardList(
-        Deno.readTextFileSync(
-          new URL(`${DATA_DIR}/singleton_exceptions.csv`, import.meta.url),
-        ),
-      );
-      this.initialized = true;
-    } catch (error) {
-      console.error("Failed to load card lists:", error);
-      this._bannedList = [];
-      this._allowedList = [];
-      this._singletonExceptions = [];
-    }
-  }
-
-  /**
-   * Initialize the lists asynchronously - use in production
+   * Initialize the lists with card data
    */
   static async initializeAsync(): Promise<void> {
     if (this.initialized) return;
@@ -91,6 +60,7 @@ export class CardLists {
       this._bannedList = [];
       this._allowedList = [];
       this._singletonExceptions = [];
+      throw error;
     }
   }
 
@@ -102,16 +72,5 @@ export class CardLists {
     this._allowedList = [];
     this._singletonExceptions = [];
     this.initialized = false;
-  }
-
-  /**
-   * Initialize lists based on environment
-   */
-  static async initialize(): Promise<void> {
-    if (Deno.env.get("DENO_TEST")) {
-      this.initializeSync();
-    } else {
-      await this.initializeAsync();
-    }
   }
 }

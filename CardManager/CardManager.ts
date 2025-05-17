@@ -4,7 +4,7 @@ import { CardLists } from "./CardLists.ts";
 
 // Import CardLists from our new module
 // Initialize card lists based on environment
-await CardLists.initialize();
+await CardLists.initializeAsync();
 
 /** Directory path for cached data */
 const CACHE_DIR = "./cache";
@@ -41,14 +41,8 @@ interface CardValidationResult {
   illegalCards: string[];
 }
 
-
-
-// Initialize lists based on environment
-if (Deno.env.get("DENO_TEST")) {
-  CardLists.initializeSync();
-} else {
-  void CardLists.initializeAsync();
-}
+// Initialize card lists asynchronously
+void CardLists.initializeAsync();
 
 /**
  * Manages card data, legality checks, and deck validation for the format
@@ -69,86 +63,23 @@ export default class CardManager {
     this.allowedList = CardLists.allowedList;
     this.singletonExceptions = CardLists.singletonExceptions;
 
-    // If running in a test environment, use mock data
-    if (Deno.env.get("DENO_TEST")) {
-      this.setupTestData();
-      return; // Skip loading cards in test environment
-    }
-
-    // If running in a build mode, use mock data
+    // If running in a build mode, just download the cards
     if (isBuildMode()) {
-      // just download the cards
       this.downloadCards().then(() => {
         console.log("[CardManager] cards downloaded");
       }).catch((error) => {
         console.error("[CardManager] Error downloading cards:", error);
       });
-      return; // Skip loading cards in build mode
+      return;
     }
 
-    // If running in a non-build mode, load cards from cache or download them
-    if (!isBuildMode()) {
-      // Semi-verbose log: CardManager initialized
-      console.log("[CardManager] initialized");
-      void this.loadCards().then(() => {
-        console.log("[CardManager] cards loaded");
-      }).catch((error) => {
-        console.error("[CardManager] Error loading cards:", error);
-      });
-    }
-  }
-
-  /**
-   * Sets up mock test data for testing environment
-   */
-  private setupTestData(): void {
-    console.log("[CardManager] setting up test data");
-
-    // Add some basic test cards
-    const mockCards = [
-      {
-        name: "Elesh Norn",
-        type_line: "Legendary Creature - Praetor",
-        color_identity: ["W"],
-        legalities: {
-          pioneer: "legal",
-          commander: "legal",
-        },
-        image_uris: {
-          small: "https://example.com/small.jpg",
-          normal: "https://example.com/normal.jpg",
-        },
-      },
-      {
-        name: "Island",
-        type_line: "Basic Land — Island",
-        color_identity: ["U"],
-        legalities: {
-          pioneer: "legal",
-          commander: "legal",
-        },
-      },
-      {
-        name: "Sol Ring",
-        type_line: "Artifact",
-        color_identity: [],
-        legalities: {
-          pioneer: "not_legal",
-          commander: "legal",
-        },
-      },
-      {
-        name: "Rat Colony",
-        type_line: "Creature — Rat",
-        color_identity: ["B"],
-        legalities: {
-          pioneer: "legal",
-          commander: "legal",
-        },
-      },
-    ] as unknown as IScryfallCard[];
-
-    this.cards = mockCards;
+    // In non-build mode, load cards from cache or download them
+    console.log("[CardManager] initialized");
+    void this.loadCards().then(() => {
+      console.log("[CardManager] cards loaded");
+    }).catch((error) => {
+      console.error("[CardManager] Error loading cards:", error);
+    });
   }
 
   /**
