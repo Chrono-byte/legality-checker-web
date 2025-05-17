@@ -76,7 +76,7 @@ const fetchDeckFromMoxfield = async (
       signal: controller.signal,
       headers: {
         "Accept": "application/json",
-        "User-Agent": "PHL-Legality-Checker",
+        "User-Agent": "PHL-Legality-Checker/1.0",
       },
       cache: "force-cache",
       keepalive: true,

@@ -5,6 +5,8 @@ import { isBuildMode } from "../utils/is-build.ts";
 const DATA_DIR = "./data";
 /** Directory path for cached data */
 const CACHE_DIR = "./cache";
+/** Minimum delay between Scryfall API requests in milliseconds */
+const SCRYFALL_DELAY = 100; // 100ms = 10 requests per second maximum
 
 /**
  * Represents a card in a deck with its quantity and name
@@ -284,6 +286,44 @@ export default class CardManager {
   }
 
   /**
+   * Implements rate-limited fetch to respect Scryfall API limits
+   * @param url URL to fetch from
+   * @param options Fetch options
+   * @returns Promise resolving to Response
+   */
+  private async rateLimitedFetch(
+    url: string,
+    options: RequestInit,
+  ): Promise<Response> {
+    // Add required headers for Scryfall API
+    const headers = {
+      "Accept": "application/json",
+      "User-Agent": "PHL-Legality-Checker/1.0",
+      ...(options.headers || {}),
+    };
+
+    // Add delay to respect rate limits
+    await new Promise((resolve) => setTimeout(resolve, SCRYFALL_DELAY));
+
+    const response = await fetch(url, { ...options, headers });
+
+    // Handle rate limiting response
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After");
+      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000; // Default to 60s if no header
+      console.log(
+        `Rate limited by Scryfall API, waiting ${
+          waitTime / 1000
+        }s before retry...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      return this.rateLimitedFetch(url, options);
+    }
+
+    return response;
+  }
+
+  /**
    * Fetches bulk data information from Scryfall API
    * @param signal AbortSignal for request cancellation
    * @param retryCount Number of retries for failed requests
@@ -466,26 +506,47 @@ export default class CardManager {
    * @returns Whether the card should be included
    */
   private isCardEligible(card: IScryfallCard): boolean {
-    // Exclude non-paper, tokens, memorabilia, emblems, and special types
+    // Exclude non-paper cards
     if (!card.games?.includes("paper")) return false;
+
     const layout = card.layout?.toLowerCase() ?? "";
     const typeLine = card.type_line?.toLowerCase() ?? "";
     const setType = card.set_type?.toLowerCase() ?? "";
     const name = card.name.toLowerCase();
 
-    if (layout.includes("token")) return false;
-    if (typeLine.includes("token")) return false;
+    // Handle DFCs - if it's a DFC, it must be one of the valid layouts
+    if (Array.isArray(card.card_faces)) {
+      if (!this.isValidMultiFaceLayout(layout)) return false;
+    }
+
+    // Exclude special layout types that don't represent playable cards
+    const excludedLayouts = [
+      "token",
+      "double_faced_token",
+      "emblem",
+      "art_series",
+      "reversible_card", // Configuration cards like The List
+      "planar",
+      "scheme",
+      "vanguard",
+    ];
+    if (excludedLayouts.includes(layout)) return false;
+
+    // Exclude memorabilia and tokens from special sets
     if (setType.includes("memorabilia") || setType.includes("token")) {
       return false;
     }
-    if (name.includes("emblem")) return false;
+
+    // Exclude emblems and counters by name/type
+    if (name.includes("emblem") || typeLine.includes("emblem")) return false;
 
     // Exclude special card types
     const excludedTypes = [
-      "vanguard",
-      "scheme",
       "conspiracy",
       "phenomenon",
+      "plane ", // Space after to avoid matching "planeswalker"
+      "scheme",
+      "vanguard",
     ];
     if (excludedTypes.some((type) => typeLine.includes(type))) return false;
 
@@ -524,7 +585,7 @@ export default class CardManager {
   ): Promise<Response> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await fetch(url, options);
+        const response = await this.rateLimitedFetch(url, options);
         return response;
       } catch (error) {
         if (attempt === maxRetries) {
@@ -652,6 +713,40 @@ export default class CardManager {
   }
 
   /**
+   * Checks if a card has a valid multi-face layout
+   * @param layout The card's layout
+   * @returns Whether the layout is a valid multi-face type
+   */
+  private isValidMultiFaceLayout(layout: string): boolean {
+    const validLayouts = [
+      "transform",
+      "modal_dfc",
+      "meld",
+      "split",
+      "flip",
+      "adventure",
+    ];
+    return validLayouts.includes(layout?.toLowerCase() ?? "");
+  }
+
+  /**
+   * Finds a card by one of its face names
+   * @param cardName Name of the card face to search for
+   * @returns Card data if found, null otherwise
+   */
+  private findByCardFace(cardName: string): IScryfallCard | null {
+    return this.cards.find(
+      (c) =>
+        // Direct name match
+        c.name === cardName ||
+        // Match multi-face card face
+        (Array.isArray(c.card_faces) &&
+          this.isValidMultiFaceLayout(c.layout) &&
+          c.card_faces.some((cf) => cf.name === cardName)),
+    ) || null;
+  }
+
+  /**
    * Checks if a card is a double-faced card and finds its data
    * @param cardName Name of the card to search for
    * @returns Card data if found, null otherwise
@@ -660,6 +755,7 @@ export default class CardManager {
     return this.cards.find(
       (c) =>
         Array.isArray(c.card_faces) &&
+        this.isValidMultiFaceLayout(c.layout) &&
         c.card_faces.some((cf) => cf.name === cardName),
     ) || null;
   }
@@ -702,9 +798,18 @@ export default class CardManager {
    * @returns Whether the card is a token
    */
   private isToken(card: IScryfallCard): boolean {
-    return card.layout === "token" ||
-      card.type_line?.toLowerCase().includes("token") ||
-      card.layout === "double_faced_token";
+    const layout = card.layout?.toLowerCase() ?? "";
+    const typeLine = card.type_line?.toLowerCase() ?? "";
+    const setType = card.set_type?.toLowerCase() ?? "";
+
+    // Check for token-specific layouts
+    if (layout === "token" || layout === "double_faced_token") return true;
+
+    // Check type line and set type as fallbacks
+    if (typeLine.includes("token")) return true;
+    if (setType.includes("token")) return true;
+
+    return false;
   }
 
   /**
@@ -713,14 +818,20 @@ export default class CardManager {
    * @returns Card data if found, null otherwise
    */
   private findRealCard(cardName: string): IScryfallCard | null {
+    // Try to find by full card name first
     const matchingCards = this.cards.filter((c) => c.name === cardName);
-    // If we have multiple cards with the same name, prefer non-tokens
-    if (matchingCards.length > 1) {
-      const nonTokens = matchingCards.filter((c) => !this.isToken(c));
-      return nonTokens[0] || null;
+    if (matchingCards.length > 0) {
+      // If we have multiple cards with the same name, prefer non-tokens
+      if (matchingCards.length > 1) {
+        const nonTokens = matchingCards.filter((c) => !this.isToken(c));
+        return nonTokens[0] || null;
+      }
+      const card = matchingCards[0];
+      return card && !this.isToken(card) ? card : null;
     }
-    const card = matchingCards[0];
-    return card && !this.isToken(card) ? card : null;
+
+    // If no direct match, try to find by card face name
+    return this.findByCardFace(cardName);
   }
 
   /**
@@ -755,15 +866,9 @@ export default class CardManager {
     legalCards: IScryfallCard[],
     illegalCards: string[],
   ): void {
-    let cardData = this.getCardWithLegality(cardName);
+    const cardData = this.getCardWithLegality(cardName);
 
-    // Handle double-faced cards (DFCs)
-    if (!cardData) {
-      const dfc = this.findDFCCard(cardName);
-      if (dfc && !this.isToken(dfc)) {
-        cardData = this.getCardWithLegality(dfc.name);
-      }
-    }
+    // No need for special handling here anymore - findRealCard now handles all card types
 
     if (!cardData) {
       illegalCards.push(cardName);
