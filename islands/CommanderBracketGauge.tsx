@@ -1,6 +1,14 @@
+import { useEffect, useState } from "preact/hooks";
+
+// Define the Card interface for our decklist structure
+interface Card {
+  quantity: number;
+  name: string;
+}
+
 interface CommanderBracketGaugeProps {
-  bracketResult: CommanderBracketResult | null;
-  loadingBracket: boolean;
+  mainDeck: Card[];
+  commander: Card;
 }
 
 interface CommanderBracketResult {
@@ -18,15 +26,120 @@ interface CommanderBracketResult {
   twoCardCombos: Array<{ cards: string[]; isEarlyGame: boolean }>;
 }
 
+async function checkCommanderBracket(
+  mainDeck: Card[],
+  commander: Card,
+): Promise<CommanderBracketResult> {
+  // Validate deck is not empty
+  if (!mainDeck || mainDeck.length === 0) {
+    throw new Error("Deck cannot be empty");
+  }
+
+  // Create a list of card names from the mainDeck
+  const cardNames = mainDeck.flatMap((card) =>
+    Array(card.quantity).fill(card.name)
+  );
+
+  // Validate we have at least one card after flattening
+  if (cardNames.length === 0) {
+    throw new Error("Deck must contain at least one card");
+  }
+
+  // Call our API endpoint to check commander bracket
+  const controller = new AbortController();
+  let timeoutId: number | undefined;
+
+  try {
+    // Set timeout
+    timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    // Format the deck list as a string (one card per line)
+    const deckListStr = cardNames.join("\n");
+
+    // We only need the path since we're on the same origin
+    const url = `/api/commander-bracket?deckList=${
+      encodeURIComponent(deckListStr)
+    }`;
+
+    // Send request to check bracket
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    // Clear timeout since we got a response
+    clearTimeout(timeoutId);
+    timeoutId = undefined;
+
+    // Handle API errors
+    if (!response.ok) {
+      throw new Error(
+        `Failed to check commander bracket (${response.status})`,
+      );
+    }
+
+    // Parse and return the result
+    return await response.json();
+  } catch (error: unknown) {
+    if (timeoutId) clearTimeout(timeoutId);
+
+    console.error("Error checking commander bracket:", error);
+    throw error;
+  }
+}
+
 export default function CommanderBracketGauge(
-  { bracketResult, loadingBracket }: CommanderBracketGaugeProps,
+  { mainDeck, commander }: CommanderBracketGaugeProps,
 ) {
+  const [bracketResult, setBracketResult] = useState<
+    CommanderBracketResult | null
+  >(null);
+  const [loadingBracket, setLoadingBracket] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadBracketData() {
+      if (!mainDeck || !commander) return;
+
+      setLoadingBracket(true);
+      setError(null);
+      try {
+        const result = await checkCommanderBracket(mainDeck, commander);
+        setBracketResult(result);
+      } catch (err) {
+        console.error("Error loading bracket data:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to analyze deck power level",
+        );
+      } finally {
+        setLoadingBracket(false);
+      }
+    }
+
+    loadBracketData();
+  }, [mainDeck, commander]);
+
   if (loadingBracket) {
     return (
       <div class="flex justify-center items-center p-8">
         <div class="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent">
         </div>
         <span class="ml-3 text-blue-700">Analyzing deck power level...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div class="mt-4 bg-white p-3 rounded border border-red-100">
+        <p class="text-sm text-red-800">
+          <span class="font-semibold">Error:</span> {error}
+        </p>
       </div>
     );
   }
@@ -81,7 +194,7 @@ export default function CommanderBracketGauge(
           </div>
 
           <div class="text-center">
-            <div class="text-xs text-blue-600 font-bold">LOADING</div>
+            <div class="text-xs text-blue-600 font-bold">ANALYZING</div>
           </div>
 
           <div class="text-center">
@@ -93,7 +206,7 @@ export default function CommanderBracketGauge(
         <div class="mt-4 bg-white p-3 rounded border border-blue-100">
           <p class="text-sm text-blue-800">
             <span class="font-semibold">Info:</span>{" "}
-            Analysis could not be performed. Please try submitting again.
+            Analyzing deck power level, please wait...
           </p>
         </div>
       </div>

@@ -1,27 +1,11 @@
-import CommanderBracketGauge from "../islands/CommanderBracketGauge.tsx";
+import { ComponentChildren } from "preact";
 
 interface CommanderInfoProps {
   commander: string;
   imageUri?: string;
   isLegal: boolean;
   legalityIssues?: string[];
-  bracketResult?: CommanderBracketResult | null;
-  loadingBracket: boolean;
-}
-
-interface CommanderBracketResult {
-  minimumBracket: number;
-  recommendedBracket: number;
-  details: {
-    minimumBracketReason: string;
-    recommendedBracketReason: string;
-    bracketRequirementsFailed: string[];
-  };
-  massLandDenial: string[];
-  extraTurns: string[];
-  tutors: string[];
-  gameChangers: string[];
-  twoCardCombos: Array<{ cards: string[]; isEarlyGame: boolean }>;
+  children?: ComponentChildren;
 }
 
 export default function CommanderInfo({
@@ -29,8 +13,7 @@ export default function CommanderInfo({
   imageUri,
   isLegal,
   legalityIssues = [],
-  bracketResult,
-  loadingBracket,
+  children,
 }: CommanderInfoProps) {
   return (
     <div class="border-t border-gray-200 p-6">
@@ -69,31 +52,28 @@ export default function CommanderInfo({
             </div>
           )}
 
-          {/* Success Message for Legal Decks */}
+          {/* Success Message and Bracket Analysis for Legal Decks */}
           {isLegal && (
-            <div class="p-5 bg-green-50 rounded-lg border border-green-200 mb-6">
-              <h3 class="text-2xl font-bold text-green-700 flex items-center">
-                <span class="mr-2">🏆</span>Legal for Pioneer Highlander
-              </h3>
-              <p class="mt-2 text-lg text-green-800">
-                This deck meets all format requirements!
-              </p>
-            </div>
-          )}
+            <>
+              <div class="p-5 bg-green-50 rounded-lg border border-green-200 mb-6">
+                <h3 class="text-2xl font-bold text-green-700 flex items-center">
+                  <span class="mr-2">🏆</span>Legal for Pioneer Highlander
+                </h3>
+                <p class="mt-2 text-lg text-green-800">
+                  This deck meets all format requirements!
+                </p>
+              </div>
 
-          {/* Commander Brackets */}
-          {isLegal && false && (
-            <div class="p-5 bg-blue-50 rounded-lg border border-blue-200 mb-6">
-              <h3 class="text-2xl font-bold text-blue-700 flex items-center">
-                <span class="mr-2">🏵️</span>Commander Bracket
-              </h3>
-              {bracketResult && (
-                <CommanderBracketGauge
-                  bracketResult={bracketResult}
-                  loadingBracket={loadingBracket}
-                />
+              {/* Commander Bracket Analysis */}
+              {children && (
+                <div class="p-5 bg-blue-50 rounded-lg border border-blue-200 mb-6">
+                  <h3 class="text-2xl font-bold text-blue-700 flex items-center">
+                    <span class="mr-2">🏵️</span>Commander Bracket Analysis
+                  </h3>
+                  {children}
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ import DeckMetrics from "../components/DeckMetrics.tsx";
 import DetailedIssues from "../components/DetailedIssues.tsx";
 import DeckInput from "../components/DeckInput.tsx";
 import CommanderInfo from "../components/CommanderInfo.tsx";
+import CommanderBracketGauge from "./CommanderBracketGauge.tsx";
 
 // Define the Card interface for our decklist structure
 interface Card {
@@ -20,6 +21,7 @@ interface Decklist {
 interface LegalityResult {
   legal: boolean;
   commander: string;
+  mainDeck: Card[];
   commanderImageUris?: {
     small?: string;
     normal?: string;
@@ -45,21 +47,6 @@ interface LegalityResult {
   requiredSize?: number;
 }
 
-interface CommanderBracketResult {
-  minimumBracket: number;
-  recommendedBracket: number;
-  details: {
-    minimumBracketReason: string;
-    recommendedBracketReason: string;
-    bracketRequirementsFailed: string[];
-  };
-  massLandDenial: string[];
-  extraTurns: string[];
-  tutors: string[];
-  gameChangers: string[];
-  twoCardCombos: Array<{ cards: string[]; isEarlyGame: boolean }>;
-}
-
 export default function DeckLegalityChecker() {
   const [deckUrl, setDeckUrl] = useState<string>("");
   const [legalityStatus, setLegalityStatus] = useState<string | null>(null);
@@ -67,11 +54,6 @@ export default function DeckLegalityChecker() {
   const [result, setResult] = useState<LegalityResult | null>(null);
   const [commander, setCommander] = useState<string | null>(null);
   const [colorIdentity, setColorIdentity] = useState<string[]>([]);
-  const [bracketResult, setBracketResult] = useState<
-    CommanderBracketResult | null
-  >(null);
-  const [loadingBracket, setLoadingBracket] = useState<boolean>(false);
-
   async function checkDeckLegality() {
     // Input validation
     const trimmedDeckUrl = deckUrl.trim();
@@ -117,23 +99,6 @@ export default function DeckLegalityChecker() {
 
       if (legalityResult.legal) {
         setLegalityStatus("✅ Deck is legal for PHL!");
-
-        // For legal decks, check the commander bracket
-        try {
-          setLoadingBracket(true);
-          const bracketData = await checkCommanderBracket(
-            decklist.mainDeck,
-            decklist.commander,
-          );
-          // Update the bracket result state
-
-          setBracketResult(bracketData);
-        } catch (error) {
-          console.error("Error checking commander bracket:", error);
-          // Don't show error to user, just silently fail as this is supplementary info
-        } finally {
-          setLoadingBracket(false);
-        }
       } else {
         setLegalityStatus("❌ Deck is not legal for PHL");
       }
@@ -240,61 +205,6 @@ export default function DeckLegalityChecker() {
 
     // This should never be reached due to the error handling above
     throw new Error("Failed to fetch deck after multiple attempts");
-  }
-
-  async function checkCommanderBracket(
-    mainDeck: Card[],
-    _commander: Card, // Not used but required by function signature
-  ): Promise<CommanderBracketResult> {
-    // Create a list of card names from the mainDeck
-    const cardNames = mainDeck.flatMap((card) =>
-      Array(card.quantity).fill(card.name)
-    );
-
-    // Call our API endpoint to check commander bracket
-    const controller = new AbortController();
-    let timeoutId: number | undefined;
-
-    try {
-      // Set timeout
-      timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      // Format the deck list as a string (one card per line)
-      const deckListStr = cardNames.join("\n");
-
-      // We only need the path since we're on the same origin
-      const url = `/api/commander-bracket?deckList=${
-        encodeURIComponent(deckListStr)
-      }`;
-
-      // Send request to check bracket
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-        },
-        signal: controller.signal,
-      });
-
-      // Clear timeout since we got a response
-      clearTimeout(timeoutId);
-      timeoutId = undefined;
-
-      // Handle API errors
-      if (!response.ok) {
-        throw new Error(
-          `Failed to check commander bracket (${response.status})`,
-        );
-      }
-
-      // Parse and return the result
-      return await response.json();
-    } catch (error: unknown) {
-      if (timeoutId) clearTimeout(timeoutId);
-
-      console.error("Error checking commander bracket:", error);
-      throw error;
-    }
   }
 
   async function checkPHLLegality(decklist: Decklist): Promise<LegalityResult> {
@@ -441,9 +351,16 @@ export default function DeckLegalityChecker() {
               imageUri={result.commanderImageUris?.normal}
               isLegal={result.legal}
               legalityIssues={getLegalityIssues()}
-              bracketResult={bracketResult}
-              loadingBracket={loadingBracket}
-            />
+            >
+              {
+                /* {true && (
+                <CommanderBracketGauge
+                  mainDeck={}
+                  commander={{ name: commander, quantity: 1 }}
+                />
+              )} */
+              }
+            </CommanderInfo>
           )}
 
           {result && (
