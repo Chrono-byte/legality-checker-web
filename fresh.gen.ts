@@ -5,11 +5,13 @@
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
 import * as $api_check_legality from "./routes/api/check-legality.ts";
+import * as $api_commander_bracket from "./routes/api/commander-bracket.ts";
 import * as $api_fetch_deck from "./routes/api/fetch-deck.ts";
 import * as $banlist from "./routes/banlist.tsx";
 import * as $deck_checker from "./routes/deck-checker.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $rules from "./routes/rules.tsx";
+import * as $CommanderBracketGauge from "./islands/CommanderBracketGauge.tsx";
 import * as $DeckLegalityChecker from "./islands/DeckLegalityChecker.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
@@ -18,6 +20,7 @@ const manifest = {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
     "./routes/api/check-legality.ts": $api_check_legality,
+    "./routes/api/commander-bracket.ts": $api_commander_bracket,
     "./routes/api/fetch-deck.ts": $api_fetch_deck,
     "./routes/banlist.tsx": $banlist,
     "./routes/deck-checker.tsx": $deck_checker,
@@ -25,6 +28,7 @@ const manifest = {
     "./routes/rules.tsx": $rules,
   },
   islands: {
+    "./islands/CommanderBracketGauge.tsx": $CommanderBracketGauge,
     "./islands/DeckLegalityChecker.tsx": $DeckLegalityChecker,
   },
   baseUrl: import.meta.url,

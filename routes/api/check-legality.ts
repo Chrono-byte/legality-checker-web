@@ -179,7 +179,11 @@ export const handler = async (
 
     // Validate request data
     const { mainDeck, commander } = body;
-    console.log(`[check-legality] Parsed body: commander=${commander.name}, mainDeck items=${Array.isArray(mainDeck) ? mainDeck.length : 0}`);
+    console.log(
+      `[check-legality] Parsed body: commander=${commander.name}, mainDeck items=${
+        Array.isArray(mainDeck) ? mainDeck.length : 0
+      }`,
+    );
 
     // Validate mainDeck
     if (!Array.isArray(mainDeck)) {
@@ -203,7 +207,9 @@ export const handler = async (
     }
 
     // Preliminary validations complete, proceeding to fetch commander data
-    console.log(`[check-legality] Fetching commander data for ${commander.name}`);
+    console.log(
+      `[check-legality] Fetching commander data for ${commander.name}`,
+    );
     for (const card of mainDeck) {
       if (typeof card.name !== "string" || !card.name) {
         return createError(
@@ -226,7 +232,9 @@ export const handler = async (
     const validCommanderData = commanderData as IScryfallCard;
 
     // Get deck legality information
-    console.log(`[check-legality] Testing decklist for commander=${commander.name}`);
+    console.log(
+      `[check-legality] Testing decklist for commander=${commander.name}`,
+    );
     const { illegalCards } = cardManager.testDecklist({
       mainDeck,
       commander,
@@ -295,7 +303,9 @@ export const handler = async (
 
     // Determine overall legality
     const isLegal = Object.values(legalChecks).every((check) => check);
-    console.log(`[check-legality] Deck legality: legal=${isLegal}, illegalCards=${illegalCards.length}`);
+    console.log(
+      `[check-legality] Deck legality: legal=${isLegal}, illegalCards=${illegalCards.length}`,
+    );
 
     // Construct response
     const response: LegalityResponse = {

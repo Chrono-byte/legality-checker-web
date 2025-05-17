@@ -42,7 +42,7 @@ export default function DeckCheckerPage() {
               <div class="prose text-gray-700">
                 <ul class="list-disc pl-6 space-y-2">
                   <li>100 card singleton deck</li>
-                  <li>Pioneer-legal legendary creature as commander</li>
+                  <li>Pioneer-legal legendary creature as Commander</li>
                   <li>All cards must be Pioneer-legal</li>
                   <li>
                     Check the{" "}

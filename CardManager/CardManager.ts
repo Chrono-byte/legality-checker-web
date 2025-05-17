@@ -346,6 +346,7 @@ export default class CardManager {
       "set_type",
       "card_faces",
       "color_identity",
+      "game_changer",
     ];
 
     // Use streaming JSON parser if available

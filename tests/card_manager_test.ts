@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
 import { assertExists } from "https://deno.land/std@0.224.0/assert/assert_exists.ts";
-import CardManager from "../load-data/CardManager.ts";
+// Update the import path if the file is named differently or in another folder
+import CardManager from "../CardManager/CardManager.ts";
 import { TestSetup } from "./utils/test-setup.ts";
 import { assert } from "$std/assert/assert.ts";
 
@@ -85,6 +86,6 @@ Deno.test("CardManager functionality", async (t) => {
     // Clean up to avoid leaks
     TestSetup.teardown();
     // Give any pending async operations a chance to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 });

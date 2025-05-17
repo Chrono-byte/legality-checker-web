@@ -1,5 +1,9 @@
-import { Button } from "../components/Button.tsx";
 import { useState } from "preact/hooks";
+import DeckHeader from "../components/DeckHeader.tsx";
+import DeckMetrics from "../components/DeckMetrics.tsx";
+import DetailedIssues from "../components/DetailedIssues.tsx";
+import DeckInput from "../components/DeckInput.tsx";
+import CommanderInfo from "../components/CommanderInfo.tsx";
 
 // Define the Card interface for our decklist structure
 interface Card {
@@ -41,6 +45,21 @@ interface LegalityResult {
   requiredSize?: number;
 }
 
+interface CommanderBracketResult {
+  minimumBracket: number;
+  recommendedBracket: number;
+  details: {
+    minimumBracketReason: string;
+    recommendedBracketReason: string;
+    bracketRequirementsFailed: string[];
+  };
+  massLandDenial: string[];
+  extraTurns: string[];
+  tutors: string[];
+  gameChangers: string[];
+  twoCardCombos: Array<{ cards: string[]; isEarlyGame: boolean }>;
+}
+
 export default function DeckLegalityChecker() {
   const [deckUrl, setDeckUrl] = useState<string>("");
   const [legalityStatus, setLegalityStatus] = useState<string | null>(null);
@@ -48,6 +67,10 @@ export default function DeckLegalityChecker() {
   const [result, setResult] = useState<LegalityResult | null>(null);
   const [commander, setCommander] = useState<string | null>(null);
   const [colorIdentity, setColorIdentity] = useState<string[]>([]);
+  const [bracketResult, setBracketResult] = useState<
+    CommanderBracketResult | null
+  >(null);
+  const [loadingBracket, setLoadingBracket] = useState<boolean>(false);
 
   async function checkDeckLegality() {
     // Input validation
@@ -94,6 +117,23 @@ export default function DeckLegalityChecker() {
 
       if (legalityResult.legal) {
         setLegalityStatus("✅ Deck is legal for PHL!");
+
+        // For legal decks, check the commander bracket
+        try {
+          setLoadingBracket(true);
+          const bracketData = await checkCommanderBracket(
+            decklist.mainDeck,
+            decklist.commander,
+          );
+          // Update the bracket result state
+
+          setBracketResult(bracketData);
+        } catch (error) {
+          console.error("Error checking commander bracket:", error);
+          // Don't show error to user, just silently fail as this is supplementary info
+        } finally {
+          setLoadingBracket(false);
+        }
       } else {
         setLegalityStatus("❌ Deck is not legal for PHL");
       }
@@ -200,6 +240,61 @@ export default function DeckLegalityChecker() {
 
     // This should never be reached due to the error handling above
     throw new Error("Failed to fetch deck after multiple attempts");
+  }
+
+  async function checkCommanderBracket(
+    mainDeck: Card[],
+    _commander: Card, // Not used but required by function signature
+  ): Promise<CommanderBracketResult> {
+    // Create a list of card names from the mainDeck
+    const cardNames = mainDeck.flatMap((card) =>
+      Array(card.quantity).fill(card.name)
+    );
+
+    // Call our API endpoint to check commander bracket
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
+
+    try {
+      // Set timeout
+      timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      // Format the deck list as a string (one card per line)
+      const deckListStr = cardNames.join("\n");
+
+      // We only need the path since we're on the same origin
+      const url = `/api/commander-bracket?deckList=${
+        encodeURIComponent(deckListStr)
+      }`;
+
+      // Send request to check bracket
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+        signal: controller.signal,
+      });
+
+      // Clear timeout since we got a response
+      clearTimeout(timeoutId);
+      timeoutId = undefined;
+
+      // Handle API errors
+      if (!response.ok) {
+        throw new Error(
+          `Failed to check commander bracket (${response.status})`,
+        );
+      }
+
+      // Parse and return the result
+      return await response.json();
+    } catch (error: unknown) {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      console.error("Error checking commander bracket:", error);
+      throw error;
+    }
   }
 
   async function checkPHLLegality(decklist: Decklist): Promise<LegalityResult> {
@@ -315,168 +410,48 @@ export default function DeckLegalityChecker() {
   }
 
   return (
-    <div class="w-full max-w-2xl mx-auto">
-      <div class="bg-white rounded-lg shadow-sm p-8 mb-8">
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col gap-2">
-            <label for="deck-url" class="text-lg font-semibold text-gray-700">
-              Enter Moxfield Deck URL:
-            </label>
-            <input
-              id="deck-url"
-              type="text"
-              value={deckUrl}
-              onInput={(e) => setDeckUrl((e.target as HTMLInputElement).value)}
-              class="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
-              placeholder="https://www.moxfield.com/decks/example"
-              disabled={loading}
-            />
-          </div>
-
-          <Button
-            onClick={checkDeckLegality}
-            disabled={loading}
-            class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-          >
-            {loading ? "Checking..." : "Check Deck Legality"}
-          </Button>
-        </div>
-      </div>
+    <div class="w-full max-w-4xl mx-auto">
+      <DeckInput
+        deckUrl={deckUrl}
+        loading={loading}
+        onUrlChange={setDeckUrl}
+        onSubmit={checkDeckLegality}
+      />
 
       {legalityStatus && (
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-          {/* Status Header */}
-          <div class={`p-6 ${result?.legal ? "bg-green-50" : "bg-red-50"}`}>
-            <p
-              class={`text-2xl font-bold ${
-                result?.legal ? "text-green-700" : "text-red-700"
-              }`}
-            >
-              {legalityStatus}
-            </p>
-          </div>
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+          <DeckHeader
+            commander={commander}
+            deckSize={result?.deckSize}
+            isLegal={result?.legal}
+          />
 
-          {/* Deck Info */}
-          {commander && (
-            <div class="border-t border-gray-100 p-6">
-              <h3 class="text-xl font-semibold text-gray-800 mb-4">
-                Deck Information
-              </h3>
-              <div class="flex flex-col md:flex-row gap-6">
-                {result?.commanderImageUris?.normal && (
-                  <div class="flex-shrink-0">
-                    <img
-                      src={result.commanderImageUris.normal}
-                      alt={commander}
-                      class="rounded-lg shadow-lg w-full md:w-64"
-                      width={265}
-                      height={370}
-                      loading="lazy"
-                    />
-                  </div>
-                )}
-                <div class="space-y-2">
-                  <p>
-                    <span class="font-medium text-gray-700">Commander:</span>
-                    {" "}
-                    <span class="text-gray-900">{commander}</span>
-                  </p>
-                  <p>
-                    <span class="font-medium text-gray-700">
-                      Color Identity:
-                    </span>{" "}
-                    <span class="text-gray-900">
-                      {colorIdentity.join(", ")}
-                    </span>
-                  </p>
-                  {result?.deckSize != null && (
-                    <p>
-                      <span class="font-medium text-gray-700">Deck Size:</span>
-                      {" "}
-                      <span class="text-gray-900">
-                        {result.deckSize} cards (Required:{" "}
-                        {result.requiredSize})
-                      </span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Legality Issues */}
-          {result && !result.legal && (
-            <div class="border-t border-gray-100 p-6 bg-red-50">
-              <h3 class="text-xl font-semibold text-red-700 mb-3">
-                Legality Issues
-              </h3>
-              <ul class="space-y-2">
-                {getLegalityIssues().map((issue, index) => (
-                  <li key={index} class="text-red-600 flex items-start">
-                    <span class="mr-2">•</span>
-                    <span>{issue}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Detailed Issues */}
           {result && (
-            <div class="border-t border-gray-100 p-6">
-              <div class="space-y-6">
-                {result.colorIdentityViolations &&
-                  result.colorIdentityViolations.length > 0 && (
-                  <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
-                      Color Identity Violations ({result.colorIdentityViolations
-                        .length})
-                    </h3>
-                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {result.colorIdentityViolations.map((card) => (
-                        <li key={card} class="text-red-600 flex items-start">
-                          <span class="mr-2">•</span>
-                          <span>{card}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            <DeckMetrics
+              isLegal={result.legal}
+              colorIdentity={colorIdentity}
+              deckSize={result.deckSize}
+              requiredSize={result.requiredSize}
+            />
+          )}
 
-                {result.nonSingletonCards &&
-                  result.nonSingletonCards.length > 0 && (
-                  <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
-                      Non-Singleton Cards ({result.nonSingletonCards.length})
-                    </h3>
-                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {result.nonSingletonCards.map((card) => (
-                        <li key={card} class="text-red-600 flex items-start">
-                          <span class="mr-2">•</span>
-                          <span>{card}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+          {commander && result && (
+            <CommanderInfo
+              commander={commander}
+              imageUri={result.commanderImageUris?.normal}
+              isLegal={result.legal}
+              legalityIssues={getLegalityIssues()}
+              bracketResult={bracketResult}
+              loadingBracket={loadingBracket}
+            />
+          )}
 
-                {result.illegalCards && result.illegalCards.length > 0 && (
-                  <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
-                      Illegal Cards ({result.illegalCards.length})
-                    </h3>
-                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {result.illegalCards.map((card) => (
-                        <li key={card} class="text-red-600 flex items-start">
-                          <span class="mr-2">•</span>
-                          <span>{card}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
+          {result && (
+            <DetailedIssues
+              colorIdentityViolations={result.colorIdentityViolations}
+              nonSingletonCards={result.nonSingletonCards}
+              illegalCards={result.illegalCards}
+            />
           )}
         </div>
       )}
