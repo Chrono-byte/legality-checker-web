@@ -20,7 +20,7 @@
   },
   "exclude": [
     "**/_fresh/*",
-    "**/load-data/cache"
+    "**/CardManager/cache"
   ],
   "imports": {
     "$fresh/": "https://deno.land/x/fresh@1.7.3/",

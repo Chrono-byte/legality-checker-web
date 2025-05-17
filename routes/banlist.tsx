@@ -107,10 +107,10 @@ export default async function handler(_req: Request, _ctx: FreshContext) {
   try {
     const [bannedListText, allowedListText] = await Promise.all([
       Deno.readTextFile(
-        new URL("../load-data/data/banned_list.csv", import.meta.url),
+        new URL("../CardManager/data/banned_list.csv", import.meta.url),
       ),
       Deno.readTextFile(
-        new URL("../load-data/data/allowed_list.csv", import.meta.url),
+        new URL("../CardManager/data/allowed_list.csv", import.meta.url),
       ),
     ]);
 
