@@ -11,6 +11,15 @@ import type {
 // Constants
 const JSON_HEADERS = {
   "Content-Type": "application/json",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+};
+
+const SECURITY_HEADERS = {
+  ...JSON_HEADERS,
+  "Cache-Control": "no-store, max-age=0",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 };
 
 const REQUEST_CONFIG = {
@@ -18,6 +27,20 @@ const REQUEST_CONFIG = {
   maxTimeout: 20000, // 20 second maximum timeout
   baseTimeout: 10000, // 10 second base timeout
   backoffFactor: 1.5, // Exponential backoff multiplier
+  maxDeckIdLength: 100, // Reasonable limit for deck ID length
+  ipRequestWindow: 60 * 1000, // 1 minute
+  maxRequestsPerWindow: 30, // 30 requests per minute
+};
+
+// Input validation function
+const validateDeckId = (deckId: string): boolean => {
+  // Check length
+  if (!deckId || deckId.length > REQUEST_CONFIG.maxDeckIdLength) {
+    return false;
+  }
+
+  // Only allow alphanumeric characters and hyphens in deck IDs
+  return /^[a-zA-Z0-9\-]+$/.test(deckId);
 };
 
 // Initialize utilities
@@ -34,7 +57,10 @@ const createError = (
     JSON.stringify({ error: message } as ErrorResponse),
     {
       status,
-      headers: { ...JSON_HEADERS, ...(rateLimit?.headers || {}) },
+      headers: {
+        ...SECURITY_HEADERS,
+        ...(rateLimit?.headers || {}),
+      },
     },
   );
 };
@@ -97,33 +123,59 @@ export const handler = async (
   _ctx: FreshContext,
 ): Promise<Response> => {
   let timeoutId: number | undefined;
-  // Semi-verbose log: incoming request URL
-  console.log(`[fetch-deck] Incoming request URL=${req.url}`);
-
-  // Skip during build and initialize utilities lazily, but allow tests to run
-  const { isBuildMode } = await import("../../utils/is-build.ts");
-  if (isBuildMode() && !Deno.env.get("DENO_TEST")) {
-    return new Response(
-      JSON.stringify({ error: "Service unavailable during build" }),
-      { status: 503, headers: JSON_HEADERS },
-    );
-  }
-
-  // Lazy initialization
-  if (!deckCache) {
-    deckCache = new DeckCache();
-    rateLimiter = new RateLimiter();
-  }
-
-  // From this point on, we know these are initialized
-  const validDeckCache = deckCache!;
-  const validRateLimiter = rateLimiter!;
 
   try {
-    // Extract deck ID from URL
-    const url = new URL(req.url);
-    const deckId = url.searchParams.get("id");
-    if (!deckId) return createError("No deck ID provided");
+    // Validate request method
+    if (req.method !== "GET") {
+      return createError("Method not allowed", 405);
+    }
+
+    // Skip during build and initialize utilities lazily, but allow tests to run
+    const { isBuildMode } = await import("../../utils/is-build.ts");
+    if (isBuildMode() && !Deno.env.get("DENO_TEST")) {
+      return new Response(
+        JSON.stringify({ error: "Service unavailable during build" }),
+        { status: 503, headers: SECURITY_HEADERS },
+      );
+    }
+
+    // Extract and validate deck ID from URL with proper error handling
+    let deckId: string;
+    try {
+      const url = new URL(req.url);
+      const rawDeckId = url.searchParams.get("id");
+      if (!rawDeckId) {
+        return createError("No deck ID provided");
+      }
+
+      if (!validateDeckId(rawDeckId)) {
+        return createError("Invalid deck ID format");
+      }
+
+      deckId = rawDeckId;
+    } catch (_error) {
+      return createError("Invalid request URL");
+    }
+
+    // Lazy initialization of utilities with proper error handling
+    if (!deckCache || !rateLimiter) {
+      try {
+        deckCache = new DeckCache();
+        rateLimiter = new RateLimiter();
+      } catch (error) {
+        console.error("[fetch-deck] Failed to initialize utilities:", error);
+        return createError("Service initialization error", 500);
+      }
+    }
+
+    // From this point on, we know these are initialized
+    const validDeckCache = deckCache!;
+    const validRateLimiter = rateLimiter!;
+
+    if (!validateDeckId(deckId)) {
+      return createError("Invalid deck ID format");
+    }
+
     // Semi-verbose log: client and deck information
     const clientIp = req.headers.get("x-forwarded-for") ||
       req.headers.get("cf-connecting-ip") ||
@@ -148,7 +200,7 @@ export const handler = async (
         JSON.stringify(cachedDeck),
         {
           headers: {
-            ...JSON_HEADERS,
+            ...SECURITY_HEADERS,
             ...rateLimit.headers,
             "X-Cache": "HIT",
           },
@@ -265,7 +317,7 @@ export const handler = async (
       JSON.stringify(processedDeck as SuccessResponse),
       {
         headers: {
-          ...JSON_HEADERS,
+          ...SECURITY_HEADERS,
           ...rateLimit.headers,
           "X-Cache": "MISS",
         },

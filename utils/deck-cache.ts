@@ -1,7 +1,7 @@
 import type { ProcessedDeck } from "../types/moxfield.ts";
 
 // Time for cache entries to live before expiration
-const CACHE_TTL = .2 * 60 * 1000; // 12 seconds
+const CACHE_TTL = .35 * 60 * 1000; // 21 seconds
 // Time-to-live for cache entries
 const MAX_CACHE_SIZE = 50; // Maximum number of entries
 

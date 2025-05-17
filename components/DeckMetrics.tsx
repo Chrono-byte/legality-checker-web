@@ -53,16 +53,24 @@ const THREE_COLOR_BASE_ORDERS: Record<string, string[]> = {
 
 // The canonical ordering for four-color combinations
 const FOUR_COLOR_BASE_ORDERS: Record<string, string[]> = {
-  "WUBR": ["W", "U", "B", "R"], // Glint (Non-Green)
-  "WUBG": ["W", "U", "B", "G"], // Dune (Non-Red)
-  "WBRG": ["W", "B", "R", "G"], // Ink (Non-Blue)
-  "UBRG": ["U", "B", "R", "G"], // Witch (Non-White)
-  "WURG": ["W", "U", "R", "G"], // Yore (Non-Black)
+  "WUBR": ["W", "U", "B", "R"], // Yore (Yore-Tiller), Artifice, Non-green
+  "UBRG": ["U", "B", "R", "G"], // Glint-Eye, Chaos, Non-white
+  "BRGW": ["B", "R", "G", "W"], // Dune (Dune-Brood), Aggression, Non-blue
+  "RGWU": ["R", "G", "W", "U"], // Ink-Treader, Altruism, Non-black
+  "GWUB": ["G", "W", "U", "B"], // Witch (Witch-Maw), Growth, Non-red
 };
 
 function getFourColorOrder(colors: string[]): string[] | null {
-  const sortedKey = [...colors].sort().join("");
+  // Ensure only unique and valid colors are considered
+  const uniqueColors = Array.from(new Set(colors)).filter((c) =>
+    COLOR_ORDER.includes(c as typeof COLOR_ORDER[number])
+  );
+  if (uniqueColors.length !== 4) return null;
 
+  // Sort the colors to get a canonical form
+  const sortedKey = [...uniqueColors].sort().join("");
+
+  // Check each base ordering to find a match
   for (const [key, order] of Object.entries(FOUR_COLOR_BASE_ORDERS)) {
     if ([...key].sort().join("") === sortedKey) {
       return order;

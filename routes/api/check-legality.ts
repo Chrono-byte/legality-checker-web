@@ -93,6 +93,96 @@ const BASIC_LANDS = new Set([
   "Wastes",
 ]);
 
+// Validation constants
+const VALIDATION_LIMITS = {
+  MAX_CARD_NAME_LENGTH: 200,
+  MAX_DECK_SIZE: 100,
+  MIN_CARD_QUANTITY: 1,
+  MAX_CARD_QUANTITY: 100,
+  REQUEST_TIMEOUT_MS: 5000,
+  MAX_MAINBOARD_CARDS: 100, // Reasonable limit for parsing
+};
+
+// Input validation functions
+const sanitizeString = (str: string): string => {
+  // Remove any non-alphanumeric, spaces, apostrophes, commas, hyphens, and slashes (for split cards)
+  return str.replace(/[^a-zA-Z0-9\s',\-\/]/g, "").trim();
+};
+
+const validateCard = (card: Card): { valid: boolean; error?: string } => {
+  if (!card || typeof card !== "object") {
+    return { valid: false, error: "Invalid card format" };
+  }
+
+  if (typeof card.name !== "string" || !card.name) {
+    return { valid: false, error: "Card name must be a non-empty string" };
+  }
+
+  if (card.name.length > VALIDATION_LIMITS.MAX_CARD_NAME_LENGTH) {
+    return { valid: false, error: "Card name exceeds maximum length" };
+  }
+
+  if (!Number.isInteger(card.quantity)) {
+    return { valid: false, error: "Card quantity must be an integer" };
+  }
+
+  if (
+    card.quantity < VALIDATION_LIMITS.MIN_CARD_QUANTITY ||
+    card.quantity > VALIDATION_LIMITS.MAX_CARD_QUANTITY
+  ) {
+    return {
+      valid: false,
+      error:
+        `Card quantity must be between ${VALIDATION_LIMITS.MIN_CARD_QUANTITY} and ${VALIDATION_LIMITS.MAX_CARD_QUANTITY}`,
+    };
+  }
+
+  // Sanitize the card name
+  card.name = sanitizeString(card.name);
+
+  return { valid: true };
+};
+
+const validateDeckInput = (
+  body: unknown,
+): { valid: boolean; error?: string; data?: DeckLegalityRequest } => {
+  if (!body || typeof body !== "object") {
+    return { valid: false, error: "Invalid request format" };
+  }
+
+  const data = body as DeckLegalityRequest;
+
+  if (!Array.isArray(data.mainDeck)) {
+    return { valid: false, error: "mainDeck must be an array" };
+  }
+
+  if (data.mainDeck.length > VALIDATION_LIMITS.MAX_MAINBOARD_CARDS) {
+    return { valid: false, error: "mainDeck exceeds maximum allowed cards" };
+  }
+
+  // Validate commander
+  const commanderValidation = validateCard(data.commander);
+  if (!commanderValidation.valid) {
+    return {
+      valid: false,
+      error: `Invalid commander: ${commanderValidation.error}`,
+    };
+  }
+
+  // Validate each card in mainDeck
+  for (const card of data.mainDeck) {
+    const validation = validateCard(card);
+    if (!validation.valid) {
+      return {
+        valid: false,
+        error: `Invalid card in mainDeck: ${validation.error} (${card.name})`,
+      };
+    }
+  }
+
+  return { valid: true, data };
+};
+
 // Helper functions
 const createError = (message: string, status = 400) =>
   new Response(
@@ -178,50 +268,22 @@ export const handler = async (
     }
 
     // Validate request data
-    const { mainDeck, commander } = body;
+    const validation = validateDeckInput(body);
+    if (!validation.valid) {
+      return createError(validation.error || "Invalid deck data");
+    }
+
+    const { mainDeck, commander } = validation.data!;
     console.log(
       `[check-legality] Parsed body: commander=${commander.name}, mainDeck items=${
         Array.isArray(mainDeck) ? mainDeck.length : 0
       }`,
     );
 
-    // Validate mainDeck
-    if (!Array.isArray(mainDeck)) {
-      return createError("Invalid deck data: mainDeck must be an array");
-    }
-    if (!mainDeck.length) {
-      return createError("Invalid deck data: mainDeck cannot be empty");
-    }
-
-    // Validate commander
-    if (!commander) {
-      return createError("Invalid deck data: commander is required");
-    }
-    if (typeof commander.name !== "string" || !commander.name) {
-      return createError("Invalid deck data: commander must have a valid name");
-    }
-    if (typeof commander.quantity !== "number" || commander.quantity < 1) {
-      return createError(
-        "Invalid deck data: commander must have a valid quantity",
-      );
-    }
-
     // Preliminary validations complete, proceeding to fetch commander data
     console.log(
       `[check-legality] Fetching commander data for ${commander.name}`,
     );
-    for (const card of mainDeck) {
-      if (typeof card.name !== "string" || !card.name) {
-        return createError(
-          `Invalid deck data: card in mainDeck must have a valid name`,
-        );
-      }
-      if (typeof card.quantity !== "number" || card.quantity < 1) {
-        return createError(
-          `Invalid deck data: card '${card.name}' must have a valid quantity`,
-        );
-      }
-    }
 
     // Validate commander and cache it
     const commanderData = cardManager.fetchCard(commander.name);
