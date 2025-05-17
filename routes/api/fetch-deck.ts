@@ -177,8 +177,7 @@ export const handler = async (
     }
 
     // Get client IP from x-forwarded-for header
-    const forwardedFor = req.headers.get("x-forwarded-for");
-    const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "127.0.0.1";
+    const clientIp = ctx.remoteAddr.hostname;
     console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
 
     const rateLimit = validRateLimiter.check(clientIp);
