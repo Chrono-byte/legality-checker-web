@@ -1,8 +1,11 @@
 import type { IScryfallCard } from "npm:scryfall-types";
 import { isBuildMode } from "../utils/is-build.ts";
+import { CardLists } from "./CardLists.ts";
 
-/** Directory path for static data files */
-const DATA_DIR = "./data";
+// Import CardLists from our new module
+// Initialize card lists based on environment
+await CardLists.initialize();
+
 /** Directory path for cached data */
 const CACHE_DIR = "./cache";
 /** Minimum delay between Scryfall API requests in milliseconds */
@@ -38,45 +41,13 @@ interface CardValidationResult {
   illegalCards: string[];
 }
 
-/**
- * Utility function to read and parse a CSV file into an array of trimmed card names
-/**
- * Reads a CSV file and returns its contents as an array of trimmed strings
- * @param filename The name of the CSV file to read
- * @returns Promise resolving to an array of card names
- * @throws Error if file cannot be read or parsed
- */
-async function loadCardList(filename: string): Promise<string[]> {
-  const text = await Deno.readTextFile(
-    new URL(`${DATA_DIR}/${filename}`, import.meta.url),
-  );
-  return text
-    .split("\n")
-    .map((line) => line.replace(/"/g, "").trim())
-    .filter(Boolean);
-}
 
-/** Banner list initialized with CSV data */
-let bannedListArray: string[] = [];
-/** Allowed list initialized with CSV data */
-let allowedListArray: string[] = [];
-/** Singleton exceptions initialized with CSV data */
-let singletonExceptionsArray: string[] = [];
 
-// Load lists concurrently
-try {
-  [bannedListArray, allowedListArray, singletonExceptionsArray] = await Promise
-    .all([
-      loadCardList("banned_list.csv"),
-      loadCardList("allowed_list.csv"),
-      loadCardList("singleton_exceptions.csv"),
-    ]);
-} catch (error) {
-  console.error("Failed to load card lists:", error);
-  // Initialize with empty arrays to prevent runtime errors
-  bannedListArray = [];
-  allowedListArray = [];
-  singletonExceptionsArray = [];
+// Initialize lists based on environment
+if (Deno.env.get("DENO_TEST")) {
+  CardLists.initializeSync();
+} else {
+  void CardLists.initializeAsync();
 }
 
 /**
@@ -94,9 +65,9 @@ export default class CardManager {
 
   constructor() {
     this.cards = [];
-    this.bannedList = bannedListArray;
-    this.allowedList = allowedListArray;
-    this.singletonExceptions = singletonExceptionsArray;
+    this.bannedList = CardLists.bannedList;
+    this.allowedList = CardLists.allowedList;
+    this.singletonExceptions = CardLists.singletonExceptions;
 
     // If running in a test environment, use mock data
     if (Deno.env.get("DENO_TEST")) {

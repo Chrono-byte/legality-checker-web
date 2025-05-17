@@ -63,7 +63,7 @@ Deno.test("API endpoints", async (t) => {
       });
 
       const resp = await handler(badRequest, CONN_INFO);
-      assertEquals(resp.status, 500);
+      assertEquals(resp.status, 400);
 
       const data = await resp.json();
       // The error message might vary, so we just check that there is an error

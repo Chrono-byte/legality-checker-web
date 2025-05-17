@@ -32,6 +32,9 @@ export class TestSetup {
       }
       return TestSetup.originalIncludes.call(this, item);
     };
+    
+    // Wait for all pending file operations to complete
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   /**
