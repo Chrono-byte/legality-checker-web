@@ -102,8 +102,19 @@ export default class CardManager {
       return; // Skip loading cards in test environment
     }
 
+    // If running in a build mode, use mock data
+    if (isBuildMode()) {
+      // just download the cards
+      this.downloadCards().then(() => {
+        console.log("[CardManager] cards downloaded");
+      }).catch((error) => {
+        console.error("[CardManager] Error downloading cards:", error);
+      });
+      return; // Skip loading cards in build mode
+    }
+
     // If running in a non-build mode, load cards from cache or download them
-    if (!isBuildMode() && !Deno.env.get("DENO_TEST")) {
+    if (!isBuildMode()) {
       // Semi-verbose log: CardManager initialized
       console.log("[CardManager] initialized");
       void this.loadCards().then(() => {
