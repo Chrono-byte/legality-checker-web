@@ -120,7 +120,7 @@ const fetchDeckFromMoxfield = async (
 
 export const handler = async (
   req: Request,
-  _ctx: FreshContext,
+  ctx: FreshContext,
 ): Promise<Response> => {
   let timeoutId: number | undefined;
 
@@ -176,10 +176,9 @@ export const handler = async (
       return createError("Invalid deck ID format");
     }
 
-    // Semi-verbose log: client and deck information
-    const clientIp = req.headers.get("x-forwarded-for") ||
-      req.headers.get("cf-connecting-ip") ||
-      "unknown";
+    // Get client IP from x-forwarded-for header
+    const forwardedFor = req.headers.get("x-forwarded-for");
+    const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "127.0.0.1";
     console.log(`[fetch-deck] Fetching deckId=${deckId} from IP=${clientIp}`);
 
     const rateLimit = validRateLimiter.check(clientIp);

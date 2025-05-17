@@ -61,14 +61,10 @@ const FOUR_COLOR_BASE_ORDERS: Record<string, string[]> = {
 };
 
 function getFourColorOrder(colors: string[]): string[] | null {
-  // Ensure only unique and valid colors are considered
-  const uniqueColors = Array.from(new Set(colors)).filter((c) =>
-    COLOR_ORDER.includes(c as typeof COLOR_ORDER[number])
-  );
-  if (uniqueColors.length !== 4) return null;
+  if (colors.length !== 4) return null;
 
   // Sort the colors to get a canonical form
-  const sortedKey = [...uniqueColors].sort().join("");
+  const sortedKey = [...colors].sort().join("");
 
   // Check each base ordering to find a match
   for (const [key, order] of Object.entries(FOUR_COLOR_BASE_ORDERS)) {
