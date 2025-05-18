@@ -57,6 +57,8 @@ export default class CardManager {
   /** List of cards allowed to have multiple copies */
   private readonly singletonExceptions: string[];
 
+  private initialized = false;
+
   constructor() {
     this.cards = [];
     this.bannedList = CardLists.bannedList;
@@ -77,6 +79,7 @@ export default class CardManager {
     console.log("[CardManager] initialized");
     void this.loadCards().then(() => {
       console.log("[CardManager] cards loaded");
+      this.initialized = true;
     }).catch((error) => {
       console.error("[CardManager] Error loading cards:", error);
     });
@@ -319,6 +322,7 @@ export default class CardManager {
       "card_faces",
       "color_identity",
       "game_changer",
+      "scryfall_uri",
     ];
 
     // Use streaming JSON parser if available
@@ -845,5 +849,46 @@ export default class CardManager {
    */
   isAllowedToBreakSingletonRule(cardName: string): boolean {
     return this.singletonExceptions.includes(cardName);
+  }
+
+  /**
+   * Shuffles an array using Fisher-Yates algorithm
+   * @param array Array to shuffle
+   * @returns Shuffled array
+   */
+  private shuffleArray<T>(array: T[]): T[] {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  /**
+   * Gets all Pioneer-legal cards
+   * @returns Array of legal cards
+   */
+  /**
+   * Returns six unique random Pioneer-legal rare or mythic rare cards (non-token, non-DFC)
+   */
+  async getSixCards(): Promise<IScryfallCard[]> {
+    while (!this.initialized) {
+      // Wait for cards to be loaded
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    // Filter cards to get only those that are legal in Pioneer and not a DFC
+    const legalCards = this.cards.filter((card) =>
+      card.legalities.pioneer === "legal"
+      && !this.isValidMultiFaceLayout(card.layout)
+    );
+
+    //
+    // Shuffle the array to get random cards
+    const shuffledCards = this.shuffleArray(legalCards);
+    // Get the first six cards
+    const selectedCards = shuffledCards.slice(0, 6);
+
+    return selectedCards;
   }
 }

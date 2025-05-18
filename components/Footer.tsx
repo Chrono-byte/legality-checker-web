@@ -16,10 +16,12 @@ export default function Footer() {
           {/* Legal Text and Credits */}
           <div class="flex flex-col space-y-2">
             <p class="text-xs text-green-50/80">
-              Pioneer Highlander is unofficial Fan Content permitted under the
-              Fan Content Policy. Not approved/endorsed by Wizards. Portions of
-              the materials used are property of Wizards of the Coast. © Wizards
-              of the Coast LLC.
+              Portions of this site are unofficial Fan Content permitted under
+              the Wizards of the Coast Fan Content Policy. The literal and
+              graphical information presented about Magic: The Gathering,
+              including card images and mana symbols, is copyright Wizards of
+              the Coast, LLC. This site is not produced by or endorsed by
+              Wizards of the Coast.
             </p>
             <p class="text-sm text-green-50">
               Created by{" "}

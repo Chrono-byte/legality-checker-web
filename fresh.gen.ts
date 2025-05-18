@@ -7,6 +7,7 @@ import * as $_app from "./routes/_app.tsx";
 import * as $api_check_legality from "./routes/api/check-legality.ts";
 import * as $api_commander_bracket from "./routes/api/commander-bracket.ts";
 import * as $api_fetch_deck from "./routes/api/fetch-deck.ts";
+import * as $api_random_card from "./routes/api/random-card.ts";
 import * as $cards from "./routes/cards.tsx";
 import * as $deck_checker from "./routes/deck-checker.tsx";
 import * as $index from "./routes/index.tsx";
@@ -14,6 +15,7 @@ import * as $philosophy from "./routes/philosophy.tsx";
 import * as $rules from "./routes/rules.tsx";
 import * as $DeckLegalityChecker from "./islands/DeckLegalityChecker.tsx";
 import * as $NavBar from "./islands/NavBar.tsx";
+import * as $RandomCardIsland from "./islands/RandomCardIsland.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
 const manifest = {
@@ -23,6 +25,7 @@ const manifest = {
     "./routes/api/check-legality.ts": $api_check_legality,
     "./routes/api/commander-bracket.ts": $api_commander_bracket,
     "./routes/api/fetch-deck.ts": $api_fetch_deck,
+    "./routes/api/random-card.ts": $api_random_card,
     "./routes/cards.tsx": $cards,
     "./routes/deck-checker.tsx": $deck_checker,
     "./routes/index.tsx": $index,
@@ -32,6 +35,7 @@ const manifest = {
   islands: {
     "./islands/DeckLegalityChecker.tsx": $DeckLegalityChecker,
     "./islands/NavBar.tsx": $NavBar,
+    "./islands/RandomCardIsland.tsx": $RandomCardIsland,
   },
   baseUrl: import.meta.url,
 } satisfies Manifest;
