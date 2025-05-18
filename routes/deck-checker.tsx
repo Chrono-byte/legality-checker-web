@@ -2,69 +2,76 @@ import DeckLegalityChecker from "../islands/DeckLegalityChecker.tsx";
 
 export default function DeckCheckerPage() {
   return (
-    <div class="min-h-screen bg-gradient-to-b from-green-50 to-white">
-      <div class="px-4 py-12 mx-auto">
-        <div class="max-w-4xl mx-auto">
-          <header class="text-center mb-12">
-            <h1 class="text-5xl font-bold text-green-800 mb-4">
-              Deck Legality Checker
-            </h1>
-            <p class="text-xl text-gray-600">
-              Verify your deck's legality for Pioneer Highlander
-            </p>
-          </header>
+    <div class="flex flex-col gap-8">
+      <header class="text-center">
+        <h1 class="text-5xl font-bold text-green-800 mb-4">
+          Deck Legality Checker
+        </h1>
+        <p class="text-xl text-gray-600">
+          Verify your deck's legality for Pioneer Highlander
+        </p>
+      </header>
 
-          <div class="mb-12 bg-white rounded-lg shadow-sm p-8">
-            <DeckLegalityChecker />
+      <section class="bg-white rounded-lg shadow-sm p-8">
+        <DeckLegalityChecker />
+      </section>
+
+      <section class="bg-white rounded-lg shadow-sm p-8">
+        <h2 class="text-2xl font-semibold text-green-700 mb-6">
+          How to Use
+        </h2>
+        <div class="prose text-gray-700 max-w-none">
+          <div class="grid md:grid-cols-2 gap-8">
+            <div>
+              <h3 class="text-xl font-semibold text-green-600 mb-4">Steps</h3>
+              <ul class="space-y-2">
+                <li>
+                  • Copy your deck URL and paste it in the box above, then click "Check Deck"
+                </li>
+                <li>
+                  • The checker will verify:
+                  <ul class="ml-6 mt-2 space-y-1">
+                    <li>- Card legality in Pioneer</li>
+                    <li>- Commander color identity</li>
+                    <li>- 100-card singleton format</li>
+                    <li>- Special allowed/banned cards</li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 class="text-xl font-semibold text-green-600 mb-4">Additional Resources</h3>
+              <ul class="space-y-4">
+                <li>
+                  <a href="/rules" class="inline-flex items-center text-green-700 hover:text-green-800 font-medium">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Format Rules
+                  </a>
+                </li>
+                <li>
+                  <a href="/banlist" class="inline-flex items-center text-green-700 hover:text-green-800 font-medium">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                    Banlist
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* How to Use */}
-            <section class="bg-white rounded-lg shadow-sm p-8">
-              <h2 class="text-2xl font-semibold text-green-700 mb-4">
-                How to Use
-              </h2>
-              <div class="prose text-gray-700">
-                <ul class="list-disc pl-6 space-y-2">
-                  <li>Create your deck on Moxfield</li>
-                  <li>Copy your deck's URL from Moxfield</li>
-                  <li>Paste the URL in the checker above</li>
-                  <li>Review the results and any warnings</li>
-                </ul>
-              </div>
-            </section>
-
-            {/* Format Requirements */}
-            <section class="bg-white rounded-lg shadow-sm p-8">
-              <h2 class="text-2xl font-semibold text-green-700 mb-4">
-                Format Requirements
-              </h2>
-              <div class="prose text-gray-700">
-                <ul class="list-disc pl-6 space-y-2">
-                  <li>100 card singleton deck</li>
-                  <li>Pioneer-legal legendary creature as Commander</li>
-                  <li>All cards must be Pioneer-legal</li>
-                  <li>
-                    Check the{" "}
-                    <a href="/banlist" class="text-green-700 hover:underline">
-                      banlist
-                    </a>{" "}
-                    for additional restrictions
-                  </li>
-                </ul>
-              </div>
-            </section>
-          </div>
-
-          <footer class="mt-16 text-center text-sm text-gray-500">
-            <p>
-              Need more information? Check the{" "}
-              <a href="/rules" class="text-green-700 hover:underline">
-                complete format rules
-              </a>
-            </p>
-          </footer>
         </div>
+      </section>
+
+      <div class="text-center text-sm text-gray-500">
+        <p>
+          Need more information? Check the{" "}
+          <a href="/rules" class="text-green-700 hover:underline">
+            complete format rules
+          </a>
+        </p>
       </div>
     </div>
   );
