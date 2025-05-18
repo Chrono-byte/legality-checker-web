@@ -27,12 +27,12 @@ export default function DeckLegalityChecker() {
   const MAX_RETRIES = 3;
 
   const setLoading = (state: keyof typeof loadingStates, value: boolean) => {
-    setLoadingStates(prev => ({ ...prev, [state]: value }));
+    setLoadingStates((prev) => ({ ...prev, [state]: value }));
   };
 
   const onRetry = () => {
     if (retryCount < MAX_RETRIES) {
-      setRetryCount(count => count + 1);
+      setRetryCount((count) => count + 1);
       onCheckDeckLegality();
     }
   };
@@ -67,7 +67,7 @@ export default function DeckLegalityChecker() {
       if (!validation.isValid) {
         throw new DeckServiceError(
           "Invalid deck format",
-          new Error(validation.errors.map(e => e.message).join(", "))
+          new Error(validation.errors.map((e) => e.message).join(", ")),
         );
       }
 
@@ -95,8 +95,8 @@ export default function DeckLegalityChecker() {
         if (error.cause) {
           if (error.cause.message.includes("Rate limit")) {
             errorMessage = `Rate limit exceeded. ${
-              retryCount < MAX_RETRIES 
-                ? "Retrying in 5 seconds..." 
+              retryCount < MAX_RETRIES
+                ? "Retrying in 5 seconds..."
                 : "Please try again later."
             }`;
             if (retryCount < MAX_RETRIES) {
@@ -114,10 +114,8 @@ export default function DeckLegalityChecker() {
 
       setLegalityStatus(
         `Error: ${errorMessage}${
-          canRetry && retryCount < MAX_RETRIES 
-            ? "\nRetrying..." 
-            : ""
-        }`
+          canRetry && retryCount < MAX_RETRIES ? "\nRetrying..." : ""
+        }`,
       );
     } finally {
       setLoadingStates({ fetchingDeck: false, checkingLegality: false });
@@ -173,7 +171,8 @@ export default function DeckLegalityChecker() {
           {!loading && legalityStatus.startsWith("Error") && (
             <div class="p-4 bg-red-50 border-b border-red-100">
               <p class="text-red-700 whitespace-pre-line">{legalityStatus}</p>
-              {retryCount < MAX_RETRIES && !legalityStatus.includes("Invalid deck format") && (
+              {retryCount < MAX_RETRIES &&
+                !legalityStatus.includes("Invalid deck format") && (
                 <button
                   type="button"
                   onClick={onRetry}

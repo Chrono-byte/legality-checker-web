@@ -1,4 +1,5 @@
 import { FreshContext } from "$fresh/server.ts";
+import { CardLists } from "../CardManager/CardLists.ts";
 
 interface BanlistData {
   bannedCards: string[];
@@ -11,7 +12,7 @@ function BanlistUI({ data }: { data: BanlistData }) {
     <>
       <header class="text-center mb-12">
         <h1 class="text-5xl font-bold text-green-800 mb-4">
-          Banlist & Allowances
+          Format Card Rules
         </h1>
         <p class="text-xl text-gray-600">
           Cards that are banned or specifically allowed in Pioneer Highlander
@@ -20,6 +21,12 @@ function BanlistUI({ data }: { data: BanlistData }) {
 
       <section class="mb-12 bg-white rounded-lg shadow-sm p-8">
         <div class="prose max-w-none text-gray-700 mb-8">
+          <p>
+            These lists are automatically generated and updated with the Deck
+            Checker. Pioneer Highlander bans certain cards for balance and
+            allows a few extra cards (mainly for mana fixing) to support diverse
+            deck building.
+          </p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -28,8 +35,22 @@ function BanlistUI({ data }: { data: BanlistData }) {
             <h3 class="text-2xl font-semibold text-red-600 mb-4">
               Banned Cards ({bannedCards.length})
             </h3>
+
+            <p class="text-gray-700 mb-4">
+              Cards on this list are not allowed in Pioneer Highlander. All
+              Pioneer bans also apply. Cards are banned to maintain format
+              diversity and prevent any single strategy from becoming dominant
+              in the format.
+            </p>
+
+            {/* Explain that currently we don't also follow the commander */}
+            <p class="text-gray-700 mb-4 text-sm italic">
+              Currently, we do not follow the Commander banlist. This is
+              unlikely to change, but if it does, we will update this page.
+            </p>
+
             <div class="bg-red-50 rounded-lg p-4">
-              <div class="max-h-96 overflow-y-auto pr-2">
+              <div class="h-96 overflow-y-auto pr-2">
                 <ul class="divide-y divide-red-200">
                   {bannedCards.map((card) => (
                     <li
@@ -56,10 +77,18 @@ function BanlistUI({ data }: { data: BanlistData }) {
           {/* Allowed Cards */}
           <div>
             <h3 class="text-2xl font-semibold text-green-600 mb-4">
-              Specifically Allowed ({allowedCards.length})
+              Allowed Cards ({allowedCards.length})
             </h3>
+
+            <p class="text-gray-700 mb-4">
+              Pioneer Highlander allows certain cards from outside Pioneer to
+              enhance gameplay variety. These carefully selected additions focus
+              on mana-fixing tools that enable more diverse deck building
+              strategies while maintaining competitive balance.
+            </p>
+
             <div class="bg-green-50 rounded-lg p-4">
-              <div class="max-h-96 overflow-y-auto pr-2">
+              <div class="h-96 overflow-y-auto pr-2">
                 <ul class="divide-y divide-green-200">
                   {allowedCards.map((card) => (
                     <li
@@ -84,15 +113,6 @@ function BanlistUI({ data }: { data: BanlistData }) {
           </div>
         </div>
       </section>
-
-      <div class="mt-12 flex justify-center">
-        <a
-          href="/deck-checker"
-          class="inline-block bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
-        >
-          Check Your Deck's Legality
-        </a>
-      </div>
     </>
   );
 }
@@ -100,30 +120,13 @@ function BanlistUI({ data }: { data: BanlistData }) {
 // Using async route handler pattern for simpler data fetching
 export default async function handler(_req: Request, _ctx: FreshContext) {
   try {
-    const [bannedListText, allowedListText] = await Promise.all([
-      Deno.readTextFile(
-        new URL("../CardManager/data/banned_list.csv", import.meta.url),
-      ),
-      Deno.readTextFile(
-        new URL("../CardManager/data/allowed_list.csv", import.meta.url),
-      ),
-    ]);
-
-    const bannedCards = bannedListText
-      .split("\n")
-      .map((line) => line.replace(/"/g, "").trim())
-      .filter(Boolean)
-      .filter((line) => !line.startsWith("//"));
-
-    const allowedCards = allowedListText
-      .split("\n")
-      .map((line) => line.replace(/"/g, "").trim())
-      .filter(Boolean)
-      .filter((line) => !line.startsWith("//"));
+    await CardLists.initializeAsync();
+    const bannedCards = CardLists.bannedList;
+    const allowedCards = CardLists.allowedList;
 
     return <BanlistUI data={{ bannedCards, allowedCards }} />;
   } catch (error) {
-    console.error("Error loading banlist data:", error);
+    console.error("Error loading card data:", error);
     return <BanlistUI data={{ bannedCards: [], allowedCards: [] }} />;
   }
 }

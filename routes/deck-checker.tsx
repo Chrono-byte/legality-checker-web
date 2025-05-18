@@ -26,7 +26,8 @@ export default function DeckCheckerPage() {
               <h3 class="text-xl font-semibold text-green-600 mb-4">Steps</h3>
               <ul class="space-y-2">
                 <li>
-                  • Copy your deck URL and paste it in the box above, then click "Check Deck"
+                  • Copy your deck URL and paste it in the box above, then click
+                  "Check Deck"
                 </li>
                 <li>
                   • The checker will verify:
@@ -39,24 +40,52 @@ export default function DeckCheckerPage() {
                 </li>
               </ul>
             </div>
-            
+
             <div>
-              <h3 class="text-xl font-semibold text-green-600 mb-4">Additional Resources</h3>
+              <h3 class="text-xl font-semibold text-green-600 mb-4">
+                Additional Resources
+              </h3>
               <ul class="space-y-4">
                 <li>
-                  <a href="/rules" class="inline-flex items-center text-green-700 hover:text-green-800 font-medium">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <a
+                    href="/rules"
+                    class="inline-flex items-center text-green-700 hover:text-green-800 font-medium"
+                  >
+                    <svg
+                      class="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
                     </svg>
                     Format Rules
                   </a>
                 </li>
                 <li>
-                  <a href="/banlist" class="inline-flex items-center text-green-700 hover:text-green-800 font-medium">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  <a
+                    href="/cards"
+                    class="inline-flex items-center text-green-700 hover:text-green-800 font-medium"
+                  >
+                    <svg
+                      class="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                      />
                     </svg>
-                    Banlist
+                    Card Lists
                   </a>
                 </li>
               </ul>

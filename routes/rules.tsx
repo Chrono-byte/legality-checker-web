@@ -2,52 +2,51 @@ export default function Rules() {
   return (
     <>
       <header class="text-center mb-12">
-        <h1 class="text-5xl font-bold text-green-800 mb-4">
-          Format Rules
-        </h1>
-        <p class="text-xl text-gray-600">
-          Complete rules and philosophy for Pioneer Highlander
+        <h1 class="text-5xl font-bold text-green-800 mb-4">Format Rules</h1>
+        <p class="text-xl text-gray-600 max-w-4xl mx-auto mb-4">
+          Pioneer Highlander combines Commander gameplay with the modern Pioneer
+          card pool.
         </p>
+        <div class="flex justify-center space-x-4">
+          <a
+            href="/philosophy"
+            class="text-green-700 hover:text-green-800 font-medium hover:underline"
+          >
+            Read about our format philosophy →
+          </a>
+        </div>
       </header>
 
       {/* Format Rules Section */}
       <section class="mb-12 bg-white rounded-lg shadow-sm p-8">
-        <h2 class="text-3xl font-bold text-green-700 mb-6">Format Rules</h2>
-
-        <div class="space-y-8">
+        <div class="space-y-10">
           {/* Deck Construction */}
           <div>
             <h3 class="text-2xl font-semibold text-green-600 mb-4">
-              Deck Construction
+              Deck Construction Rules
             </h3>
-            <ul class="list-disc pl-6 space-y-2 text-gray-700">
-              <li>Your deck must contain exactly 100 cards</li>
-              <li>One card must be designated as your commander</li>
+            <ul class="list-disc pl-6 space-y-3 text-gray-700">
               <li>
-                All cards must be Pioneer-legal (except specifically allowed
-                cards)
+                Players must choose a legendary creature as their commander
               </li>
               <li>
-                You can only have one copy of any card in your deck
-                (singleton)
-              </li>
-            </ul>
-          </div>
-
-          {/* Commander Rules */}
-          <div>
-            <h3 class="text-2xl font-semibold text-green-600 mb-4">
-              Commander Rules
-            </h3>
-            <ul class="list-disc pl-6 space-y-2 text-gray-700">
-              <li>Your commander must be a legendary creature</li>
-              <li>
-                Your deck can only include cards within your commander's color
-                identity
+                A deck must contain exactly 100 cards, including the commander
               </li>
               <li>
-                Commander damage and commander tax rules apply as in regular
-                Commander
+                A card's color identity includes its color plus the colors of
+                any mana symbols in its rules text
+              </li>
+              <li>
+                Cards in your deck cannot have any colors in their color
+                identity which are not in your commander's color identity
+              </li>
+              <li>
+                With the exception of basic lands, no two cards in your deck may
+                have the same English name
+              </li>
+              <li>
+                All cards must be Pioneer-legal (Return to Ravnica and forward),
+                except for specifically allowed cards
               </li>
             </ul>
           </div>
@@ -55,68 +54,52 @@ export default function Rules() {
           {/* Game Rules */}
           <div>
             <h3 class="text-2xl font-semibold text-green-600 mb-4">
-              Game Rules
+              Play Rules
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ul class="list-disc pl-6 space-y-1 text-gray-700">
-                <li>40 starting life</li>
-                <li>21 commander damage</li>
-                <li>Free mulligan</li>
-                <li>First player does draw for turn</li>
+            <div class="bg-green-50 p-6 rounded-lg">
+              <ul class="list-disc pl-6 space-y-2 text-gray-700">
+                <li>Players begin with 40 life</li>
+                <li>
+                  A player who has been dealt 21 combat damage by a single
+                  commander loses the game
+                </li>
+                <li>
+                  Regular mulligan rules apply, with the exception of the first
+                  being free
+                </li>
+                <li>The player who plays first draws for their first turn</li>
+                <li>
+                  Turn order proceeds clockwise from the starting player
+                </li>
               </ul>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Philosophy Section */}
-      <section class="bg-white rounded-lg shadow-sm p-8">
-        <h2 class="text-3xl font-bold text-green-700 mb-6">
-          Format Philosophy
-        </h2>
-        <div class="prose max-w-none text-gray-700">
-          <p class="mb-6">
-            Pioneer Highlander represents a balanced approach to constructed
-            Magic, combining the strategic depth of singleton formats with the
-            accessibility of Pioneer.
-          </p>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h3 class="text-2xl font-semibold text-green-600 mb-4">
-                Format Goals
-              </h3>
-              <ul class="list-disc pl-6 space-y-2">
-                <li>Promote strategic depth and creative deckbuilding</li>
-                <li>Maintain accessibility through the Pioneer card pool</li>
-                <li>Foster engaging commander-style gameplay</li>
-                <li>Support both casual and competitive play</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 class="text-2xl font-semibold text-green-600 mb-4">
-                Banlist Overview
-              </h3>
-              <p class="mb-4">
-                Our banlist is carefully curated to maintain format health and
-                diversity. View the complete list and our banlist philosophy
-                on the{" "}
-                <a href="/banlist" class="text-green-700 hover:underline">
-                  banlist page
-                </a>
-                .
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-12 flex justify-center">
-            <a
-              href="/deck-checker"
-              class="inline-block bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
-            >
-              Check Your Deck's Legality
-            </a>
+          {/* Commander Rules */}
+          <div>
+            <h3 class="text-2xl font-semibold text-green-600 mb-4">
+              Commander-Specific Rules
+            </h3>
+            <ul class="list-disc pl-6 space-y-3 text-gray-700">
+              <li>Your commander begins the game in the command zone</li>
+              <li>
+                You may cast your commander from the command zone at any time
+                you could normally cast that creature
+              </li>
+              <li>
+                Each time you cast your commander from the command zone, it
+                costs {"{2}"}{" "}
+                more for each previous time you've cast it from the command zone
+              </li>
+              <li>
+                If your commander would go to your hand, library, graveyard, or
+                exile, you may instead put it into the command zone
+              </li>
+              <li>
+                Being a commander is a property of the physical card and cannot
+                be copied or overwritten by effects
+              </li>
+            </ul>
           </div>
         </div>
       </section>

@@ -1,4 +1,3 @@
-
 export const API_CONFIG = {
   RATE_LIMIT: {
     REQUESTS_PER_MINUTE: 30,

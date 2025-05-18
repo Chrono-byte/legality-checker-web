@@ -23,10 +23,10 @@ export interface Decklist {
 
 export class DeckServiceError extends Error {
   override cause?: Error;
-  
+
   constructor(message: string, cause?: Error) {
     super(message);
-    this.name = 'DeckServiceError';
+    this.name = "DeckServiceError";
     this.cause = cause;
   }
 }
@@ -77,47 +77,70 @@ export class DeckService {
       if (cached) return cached;
 
       const decklist = await this.apiClient.request<Decklist>(
-        `/api/fetch-deck?id=${encodeURIComponent(deckId)}`
+        `/api/fetch-deck?id=${encodeURIComponent(deckId)}`,
       );
       this.setCachedData(cacheKey, decklist);
       return decklist;
     } catch (error) {
       if (error instanceof ApiError) {
-        throw new DeckServiceError(`Failed to fetch deck: ${error.message}`, error);
+        throw new DeckServiceError(
+          `Failed to fetch deck: ${error.message}`,
+          error,
+        );
       }
-      throw new DeckServiceError('Failed to fetch deck', error instanceof Error ? error : undefined);
+      throw new DeckServiceError(
+        "Failed to fetch deck",
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
   async checkLegality(decklist: Decklist): Promise<LegalityResult> {
     try {
-      return await this.apiClient.request<LegalityResult>("/api/check-legality", {
-        method: "POST",
-        body: decklist,
-      });
+      return await this.apiClient.request<LegalityResult>(
+        "/api/check-legality",
+        {
+          method: "POST",
+          body: decklist,
+        },
+      );
     } catch (error) {
       if (error instanceof ApiError) {
-        throw new DeckServiceError(`Failed to check legality: ${error.message}`, error);
+        throw new DeckServiceError(
+          `Failed to check legality: ${error.message}`,
+          error,
+        );
       }
-      throw new DeckServiceError('Failed to check legality', error instanceof Error ? error : undefined);
+      throw new DeckServiceError(
+        "Failed to check legality",
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
-  async checkCommanderBracket(mainDeck: Card[]): Promise<CommanderBracketResult> {
+  async checkCommanderBracket(
+    mainDeck: Card[],
+  ): Promise<CommanderBracketResult> {
     try {
       const deckList = mainDeck
-        .flatMap(card => Array(card.quantity).fill(card.name))
+        .flatMap((card) => Array(card.quantity).fill(card.name))
         .join("\n");
 
       const params = new URLSearchParams({ deckList });
       return await this.apiClient.request<CommanderBracketResult>(
-        `/api/commander-bracket?${params}`
+        `/api/commander-bracket?${params}`,
       );
     } catch (error) {
       if (error instanceof ApiError) {
-        throw new DeckServiceError(`Failed to check commander bracket: ${error.message}`, error);
+        throw new DeckServiceError(
+          `Failed to check commander bracket: ${error.message}`,
+          error,
+        );
       }
-      throw new DeckServiceError('Failed to check commander bracket', error instanceof Error ? error : undefined);
+      throw new DeckServiceError(
+        "Failed to check commander bracket",
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -126,24 +149,28 @@ export class DeckService {
 
     if (!decklist.commander) {
       errors.push({
-        field: 'commander',
-        message: 'Commander is required',
+        field: "commander",
+        message: "Commander is required",
       });
     }
 
-    if (!decklist.mainDeck || !Array.isArray(decklist.mainDeck) || decklist.mainDeck.length === 0) {
+    if (
+      !decklist.mainDeck || !Array.isArray(decklist.mainDeck) ||
+      decklist.mainDeck.length === 0
+    ) {
       errors.push({
-        field: 'mainDeck',
-        message: 'Main deck must contain at least one card',
+        field: "mainDeck",
+        message: "Main deck must contain at least one card",
       });
     } else {
       const invalidCards = decklist.mainDeck.filter(
-        card => !card.name || typeof card.quantity !== 'number' || card.quantity < 1
+        (card) =>
+          !card.name || typeof card.quantity !== "number" || card.quantity < 1,
       );
       if (invalidCards.length > 0) {
         errors.push({
-          field: 'mainDeck',
-          message: 'All cards must have a name and positive quantity',
+          field: "mainDeck",
+          message: "All cards must have a name and positive quantity",
         });
       }
     }
@@ -157,8 +184,11 @@ export class DeckService {
   extractDeckIdFromUrl(url: string): string {
     try {
       const urlObj = new URL(url);
-      if (urlObj.hostname === "www.moxfield.com" || urlObj.hostname === "moxfield.com") {
-        const parts = urlObj.pathname.split("/").filter(part => part);
+      if (
+        urlObj.hostname === "www.moxfield.com" ||
+        urlObj.hostname === "moxfield.com"
+      ) {
+        const parts = urlObj.pathname.split("/").filter((part) => part);
         if (parts.length >= 2) {
           return parts[parts.length - 1];
         }
@@ -166,8 +196,10 @@ export class DeckService {
       throw new Error("Invalid Moxfield URL format");
     } catch (error) {
       throw new DeckServiceError(
-        `Could not parse deck URL: ${error instanceof Error ? error.message : 'Invalid URL'}`,
-        error instanceof Error ? error : undefined
+        `Could not parse deck URL: ${
+          error instanceof Error ? error.message : "Invalid URL"
+        }`,
+        error instanceof Error ? error : undefined,
       );
     }
   }

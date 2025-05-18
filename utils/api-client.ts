@@ -3,17 +3,17 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public data?: unknown
+    public data?: unknown,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
 export class NetworkError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'NetworkError';
+    this.name = "NetworkError";
   }
 }
 
@@ -56,7 +56,7 @@ export class ApiClient {
     throw new ApiError(
       "Rate limit exceeded",
       429,
-      { retryAfter: this.rateLimitDelay }
+      { retryAfter: this.rateLimitDelay },
     );
   }
 
@@ -81,7 +81,10 @@ export class ApiClient {
 
     while (retries <= maxRetries) {
       try {
-        timeoutId = setTimeout(() => controller.abort(), timeout + (retries * 5000));
+        timeoutId = setTimeout(
+          () => controller.abort(),
+          timeout + (retries * 5000),
+        );
 
         const response = await fetch(endpoint, {
           method,
@@ -101,7 +104,7 @@ export class ApiClient {
 
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          
+
           if (response.status === 429) {
             if (retries < maxRetries) {
               retries++;
@@ -113,7 +116,7 @@ export class ApiClient {
           throw new ApiError(
             data.error || `API request failed (${response.status})`,
             response.status,
-            data
+            data,
           );
         }
 

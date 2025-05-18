@@ -92,12 +92,31 @@ export default class CardManager {
       console.log(`[CardManager] loading cards from cache ${filePath}`);
       const data = await Deno.readTextFile(filePath);
       this.cards = JSON.parse(data) as IScryfallCard[];
+
+      // Find all cards that are banned in Pioneer from Scryfall data
+      const pioneerBannedCards = this.cards
+        .filter((card) => card.legalities?.pioneer === "banned")
+        .map((card) => card.name);
+
+      // Add these cards to our banned list
+      if (pioneerBannedCards.length > 0) {
+        console.log(
+          `[CardManager] adding ${pioneerBannedCards.length} Pioneer-banned cards to banned list`,
+        );
+
+        // sort them alphabetically to match our allowed list
+        pioneerBannedCards.sort((a, b) => a.localeCompare(b));
+
+        // This is a bit of a hack, but we need to add these cards to the banned list
+        CardLists.addToBannedList(pioneerBannedCards);
+      }
+
       console.log(`[CardManager] loaded ${this.cards.length} cards from cache`);
     } catch (error) {
       // During build, we should never try to download cards
       if (isBuildMode()) {
         throw new Error(
-          "Card data is required for build but cards.json was not found. Please run the development server first to download card data.",
+          "Card data is required for build but cards.json was not found. Please run the build command to download card data.",
         );
       }
 

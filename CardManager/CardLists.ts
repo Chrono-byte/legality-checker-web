@@ -33,6 +33,18 @@ export class CardLists {
   }
 
   /**
+   * Add cards to the banned list
+   * @param cardNames Names of cards to add to the banned list
+   */
+  static addToBannedList(cardNames: string[]): void {
+    // Only add cards that aren't already in the banned list
+    const newBannedCards = cardNames.filter((name) =>
+      !this._bannedList.includes(name)
+    );
+    this._bannedList.push(...newBannedCards);
+  }
+
+  /**
    * Initialize the lists with card data
    */
   static async initializeAsync(): Promise<void> {

@@ -31,8 +31,8 @@ export default function App({ Component }: PageProps) {
       </head>
       <body class="flex flex-col min-h-screen">
         <NavBar />
-        <main class="flex-grow">
-          <div class="max-w-4xl mx-auto px-4 py-12 min-h-[calc(100vh-4rem)]">
+        <main class="flex-grow bg-gradient-to-b from-white via-green-10 to-green-50">
+          <div class="max-w-5xl mx-auto px-4 py-12 min-h-[calc(100vh-4rem)]">
             <Component />
           </div>
         </main>

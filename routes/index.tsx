@@ -68,10 +68,10 @@ export default function Home() {
               📋 Complete Format Rules
             </a>
             <a
-              href="/banlist"
+              href="/cards"
               class="block text-green-700 hover:text-green-800 font-medium"
             >
-              🚫 Banlist & Special Cards
+              🚫 Card Lists
             </a>
             <a
               href="/deck-checker"
