@@ -1,4 +1,4 @@
-import RandomCardIsland from "../islands/RandomCardIsland.tsx";
+import _RandomCardIsland from "../islands/RandomCardIsland.tsx";
 
 export default function Home() {
   return (

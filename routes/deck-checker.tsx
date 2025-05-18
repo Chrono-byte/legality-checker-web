@@ -24,22 +24,20 @@ export default function DeckCheckerPage() {
           <div class="grid md:grid-cols-2 gap-8">
             <div>
               <h3 class="text-xl font-semibold text-green-600 mb-4">Steps</h3>
-              <ul class="space-y-2">
+                <ol class="list-decimal list-inside space-y-2">
                 <li>
-                  • Copy your deck URL and paste it in the box above, then click
-                  "Check Deck"
+                  Paste your Moxfield deck URL above and select <strong>Check Deck</strong>.
                 </li>
                 <li>
-                  • The checker will verify:
-                  <ul class="ml-6 mt-2 space-y-1">
-                    <li>- Card legality in Pioneer</li>
-                    <li>- Commander color identity</li>
-                    <li>- 100-card singleton format</li>
-                    <li>- Special allowed/banned cards</li>
+                  The checker will verify your deck for:
+                  <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                  <li>Card legality in Pioneer</li>
+                  <li>Commander color identity</li>
+                  <li>100-card singleton format</li>
+                  <li>Special allowed/banned cards</li>
                   </ul>
                 </li>
-              </ul>
-            </div>
+                </ol></div>
 
             <div>
               <h3 class="text-xl font-semibold text-green-600 mb-4">
