@@ -7,7 +7,7 @@ export const handler: Handlers = {
     try {
       // Create a new instance of CardManager
       const cardManager = new CardManager();
-      
+
       // Fetch a random set of cards
       let cards = await cardManager.getSixCards();
 
@@ -29,14 +29,14 @@ export const handler: Handlers = {
           oracle_id: card.oracle_id,
           image_uris: card.image_uris,
           uri: card.scryfall_uri,
-        }
+        };
       }) as IScryfallCard[];
 
       return new Response(
         JSON.stringify(cards),
         {
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     } catch (error) {
       console.error("Error fetching random card:", error);

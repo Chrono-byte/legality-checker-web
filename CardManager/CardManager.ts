@@ -879,8 +879,8 @@ export default class CardManager {
 
     // Filter cards to get only those that are legal in Pioneer and not a DFC
     const legalCards = this.cards.filter((card) =>
-      card.legalities.pioneer === "legal"
-      && !this.isValidMultiFaceLayout(card.layout)
+      card.legalities.pioneer === "legal" &&
+      !this.isValidMultiFaceLayout(card.layout)
     );
 
     //

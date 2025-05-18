@@ -24,7 +24,7 @@ export default function RandomCardIsland() {
     }
     // Use a larger range before modulo to get better distribution
     const mod = Math.abs((hash * 0xdeadbeef) % 5);
-    
+
     console.log(`Card ${id}: hash=${hash}, mod=${mod}`); // Debug log
 
     // we want the cards to be in a random order, and have a few different elevations to look shuffled
@@ -71,7 +71,7 @@ export default function RandomCardIsland() {
       const response = await fetch("/api/random-card");
       if (!response.ok) throw new Error("Network response was not ok");
       const cards = await response.json();
-      console.log('Received cards:', cards); // Debug log
+      console.log("Received cards:", cards); // Debug log
       setCards(cards);
     } catch (error) {
       console.error("Error fetching cards:", error);

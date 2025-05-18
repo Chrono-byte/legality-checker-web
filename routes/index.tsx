@@ -28,9 +28,11 @@ export default function Home() {
       </div>
 
       {/* Random Card Display */}
-      {/* <div class="flex justify-center items-center">
+      {
+        /* <div class="flex justify-center items-center">
         <RandomCardIsland />
-      </div> */}
+      </div> */
+      }
 
       {/* Content Grid */}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto px-6 pb-12">
@@ -72,21 +74,27 @@ export default function Home() {
               href="/rules"
               class="flex items-center justify-center p-4 text-green-700 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all font-medium group shadow hover:shadow-lg"
             >
-              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">📋</span>
+              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">
+                📋
+              </span>
               Complete Format Rules
             </a>
             <a
               href="/cards"
               class="flex items-center justify-center p-4 text-green-700 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all font-medium group shadow hover:shadow-lg"
             >
-              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">🚫</span>
+              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">
+                🚫
+              </span>
               Card Lists
             </a>
             <a
               href="/deck-checker"
               class="flex items-center justify-center p-4 text-green-700 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all font-medium group shadow hover:shadow-lg"
             >
-              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">✓</span>
+              <span class="text-2xl group-hover:scale-110 transition-transform mr-3">
+                ✓
+              </span>
               Deck Legality Checker
             </a>
           </div>
