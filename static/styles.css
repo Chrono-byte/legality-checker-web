@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.mana-symbol {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Card collage styles */
+.homepage-collage-cards {
+  position: relative;
+  /* shift to the fold */
+  margin-top: 18rem;
+  min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 2rem;
+  z-index: 2;
+}
+
+/* Card base styles */
+.homepage-collage-cards a {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+.homepage-collage-cards .card {
+  position: relative;
+  width: 175px;
+  margin: 0 -40px; /* Adjusted margin to maintain proportional spacing */
+  flex-shrink: 0;
+  will-change: transform;
+}
+
+.homepage-collage-cards .card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4.75% / 3.5%;
+}
+
+/* Card hover effects */
+.homepage-collage-cards .card:hover {
+  transform: translateY(-1rem);
+  z-index: 20;
+}
+
+/* Featured card styles */
+.homepage-collage-cards .card.featured {
+  order: 1;
+  margin: 0;
+  transform: scale(1.1);
+  transform-origin: center bottom;
+  z-index: 10;
+}
+
+.homepage-collage-cards .card.featured:hover {
+  transform: scale(1.45);
+}
